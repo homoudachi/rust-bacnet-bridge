@@ -9,7 +9,7 @@ A device that forwards BACnet NPDUs between networks with different BACnet netwo
 _Avoid_: Bridge, gateway
 
 **Hub (BACnet/SC Hub)**:
-A BACnet/SC relay that forwards frames between connected spokes. Cloud-hosted, always available.
+A BACnet/SC relay that forwards frames between connected spokes. Can be cloud-hosted (VPS) or embedded on the Site Router (no VPS needed). In embedded mode, the Site Router simultaneously runs as Hub and Router.
 _Avoid_: Server, broker
 
 **Spoke**:
@@ -49,9 +49,12 @@ _Avoid_: Client router, remote bridge
 - A **Hub** connects zero or more **Spokes**
 - A **Spoke** connects to exactly one **Hub**
 - A **Foreign Device** registers with exactly one **BBMD**
+- A **Site Router** may simultaneously run as a **Hub** (embedded Hub mode, `--with-hub` flag)
 - A **Laptop Router** serves as the BACnet/SC-to-BACnet/IP translator for **iComm**
 
 ## Topology
+
+Primary mode (BACnet/SC via cloud Hub):
 
 ```
                          BACnet/IP            BACnet/SC            BACnet/SC            BACnet/IP
@@ -59,7 +62,15 @@ iComm ──────────────────► Laptop Router �
 (Foreign Device or UDP)  (Spoke)          (Cloud)    (Spoke)           (network 1)
 ```
 
-Fallback mode (Tailscale):
+Embedded Hub mode (no VPS — Site Router also hosts the Hub):
+
+```
+                         BACnet/IP            BACnet/SC                               BACnet/IP
+iComm ──────────────────► Laptop Router ────► Site Router (Hub + Router) ────► LAN devices
+(Foreign Device or UDP)  (Spoke)          (Embedded Hub, self-signed TLS)     (network 1)
+```
+
+Fallback mode (Tailscale — Laptop Router bypassed entirely):
 
 ```
                          BACnet/IP over Tailscale VPN             BACnet/IP
