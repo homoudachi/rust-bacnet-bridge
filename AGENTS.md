@@ -45,3 +45,17 @@ CONTEXT.md defines precise terminology. Use these terms, not casual synonyms:
 - Tests: `cargo test` (unit), `cargo test --test *` (integration), Docker compose e2e
 - Feature flags: `router` (default), `hub` (default), `serve` (default), `windows-tray` (off)
 - Build: `cargo build --release --features windows-tray` for Windows
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `homoudachi/rust-bacnet-bridge`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Standard five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo: `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.

@@ -1,0 +1,22 @@
+[package]
+name = "bridge-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+dirs = "5"
+tracing = "0.1"
+thiserror = "2"
+bacnet-types = "0.9"
+bacnet-encoding = "0.9"
+bacnet-transport = { version = "0.9", features = ["sc-tls"] }
+bacnet-network = "0.9"
+tokio = { version = "1.52.3", features = ["sync", "macros", "rt"] }
+bytes = "1.11.1"
+rustls = { version = "0.23.40", default-features = false, features = ["aws_lc_rs", "std"] }
+tokio-rustls = "0.26.4"
+rand = "0.10.1"
+rustls-pemfile = "2.2.0"
+webpki-roots = "1.0.7"

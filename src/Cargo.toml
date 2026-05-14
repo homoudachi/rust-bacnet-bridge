@@ -1,0 +1,30 @@
+[package]
+name = "bacnet-bridge"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "bacnet-bridge"
+path = "main.rs"
+
+[features]
+default = ["hub", "router", "serve"]
+hub = ["bacnet-transport/sc-tls"]
+router = []
+serve = []
+windows-tray = []
+acme = ["tokio-rustls-acme"]
+
+[dependencies]
+bridge-core = { path = "../crates/bridge-core" }
+bacnet-transport = { version = "0.9", default-features = false }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.8"
+rcgen = { version = "0.14", default-features = false, features = ["pem", "aws_lc_rs"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+tokio-rustls-acme = { version = "0.9", optional = true }

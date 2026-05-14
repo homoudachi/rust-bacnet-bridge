@@ -1,0 +1,20 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "external_directory": {
+      "~/.cargo/registry/**": "allow",
+      "~/.cargo/**": "allow",
+      "~/.rustup/**": "allow",
+      "*": "ask"
+    },
+    "bash": {
+      "cargo *": "allow",
+      "git *": "allow",
+      "gh *": "allow",
+      "rustc *": "allow",
+      "rustup *": "allow",
+      "*": "ask"
+    },
+    "edit": "allow"
+  }
+}
