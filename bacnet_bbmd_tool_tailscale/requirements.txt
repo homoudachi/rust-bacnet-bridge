@@ -1,8 +1,0 @@
-BAC0==22.9.21
-bacpypes==0.18.3
-nicegui==1.4.21
-pystray==0.19.5
-Pillow
-psutil==5.9.8
-pyasyncore
-pyasynchat

@@ -1,7 +1,7 @@
 # Functional Specification: BACnet Bridge
 
-**Version:** 0.1.0 — Draft
-**Date:** 2026-05-14
+**Version:** 0.2.0 — Draft
+**Date:** 2026-05-15
 **Status:** In Progress
 
 ## Table of Contents
@@ -93,7 +93,33 @@ iComm ──────────────────► Site Router (BBM
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 Data Flow
+### 2.2 Reference Implementations
+
+**rusty-bacnet workspace** (14 crates at `crates/`):
+- `bacnet-network` — `BACnetRouter`, router table, Clause 6 forwarding
+- `bacnet-transport` — `TransportPort` trait, BIP, SC, BBMD, loopback transports
+- `bacnet-types` / `bacnet-encoding` / `bacnet-services` / `bacnet-client` / `bacnet-server` / `bacnet-objects`
+
+**rusty-bacnet documentation examples** (`examples/rust/`):
+- `bip_client_server.rs` — Who-Is discovery, ReadProperty, RPM, WriteProperty over loopback BIP
+- `cov_subscriptions.rs` — COV with broadcast channel, simulated value changes
+- `multi_object_server.rs` — 14 object types with bulk RPM query support
+
+**rusty-bacnet benchmark binaries** (`benchmarks/src/bin/`):
+- `bacnet_router.rs` — multi-port BIP router CLI (accepts `--ports bip:ip:port:broadcast:network,...`)
+- `bacnet_bbmd.rs` — BBMD with BDT config and integrated BACnet server
+- `bacnet_sc_hub.rs` — SC hub with self-signed or file-based TLS certs
+- `bacnet_device.rs` — configurable device (BIP or SC, with optional foreign device mode)
+
+**BTL harness** (`bacnet-btl` at `https://github.com/jscott3201/rusty-bacnet-btl-harness`):
+- `src/self_test/in_process.rs:129-428` — `build_test_database()`: full BTL database with all 64 object types
+- `src/tests/s09_data_link/ipv4.rs` — 72 BVLC/BBMD/FD tests (9.3.1–9.3.72)
+- `src/tests/s09_data_link/sc.rs` — 100 BACnet/SC tests (9.9.1–9.9.100)
+- `src/tests/s10_network_mgmt/routing.rs` — 81 routing tests (10.1–10.5)
+- `docs/btl.md:564-649` — Docker compose topologies for multi-network routing, SC hub+server+tester
+- `examples/docker/Dockerfile.btl` — two-stage Alpine build pattern for test containers
+
+### 2.3 Data Flow
 
 ```
 [Web UI / Tray] ──(commands)──► [AppState] ──► [Routing Engine]
@@ -175,7 +201,7 @@ bacnet-bridge/
 │       ├── Cargo.toml
 │       └── src/
 │           └── main.rs           # Who-Is/I-Am/RP round-trip tests
-└── bacnet_bbmd_tool_tailscale/   # Legacy Python prototype (reference only)
+└── btl-harness/                   # BTL compliance test results
 ```
 
 ### 3.2 Crate Dependencies
@@ -239,6 +265,15 @@ pub enum Transport {
 }
 ```
 
+#### Reference
+
+- `TransportPort` trait definition: `crates/bacnet-transport/src/port.rs:49-82` — five required methods: `start()`, `stop()`, `send_unicast()`, `send_broadcast()`, `local_mac()`
+- `ReceivedNpdu` struct: `:14-23` — `npdu: Bytes`, `source_mac: MacAddr`, optional `reply_tx`
+- MAC address formats: `:3-6` — BIP: 6 bytes (4-byte IPv4 + 2-byte port), SC: 6 bytes (VMAC), MS/TP: 1 byte
+- `LoopbackTransport`: `crates/bacnet-transport/src/loopback.rs` — in-process `TransportPort` impl for testing (no real network I/O)
+- `AnyTransport<S>`: `crates/bacnet-transport/src/any.rs` — type-erased enum wrapping all transport types, enabling mixed-transport routing
+- Implementors: `BipTransport` in `bip/mod.rs:289`, `ScTransport<W>` in `sc/mod.rs:453`, `Bip6Transport` in `bip6/port.rs`, `MstpTransport<S>` in `mstp/`
+
 ### 4.2 BACnet/SC Transport (Primary)
 
 **Source crate:** `bacnet-transport::sc::ScTransport<TlsWebSocket>`
@@ -263,6 +298,15 @@ let tls_config = build_client_tls_config(None, Some(client_cert_path), Some(clie
 - `ScReconnectConfig` supports exponential backoff
 - Our router exposes this as config parameters: `reconnect_initial_ms`, `reconnect_max_ms`, `reconnect_max_attempts`
 
+#### Reference
+
+- `ScTransport<W: WebSocketPort>`: `crates/bacnet-transport/src/sc/mod.rs:313-389` (struct + builder), `:454-654` (start with handshake + recv loop), `:396-438` (Connect-Request/Connect-Accept), `:687-726` (send_unicast/send_broadcast)
+- `ScReconnectConfig`: `:288-306` — `initial_delay_ms` (10s), `max_delay_ms` (10min), `max_retries` (10)
+- `TlsWebSocket`: `crates/bacnet-transport/src/sc_tls.rs:25-115` — `connect(url, tls_config)` performs TLS handshake + WebSocket upgrade with `hub.bsc.bacnet.org` subprotocol
+- Reference binary: `benchmarks/src/bin/bacnet_sc_hub.rs` — SC hub with self-signed TLS
+- SC hub implementation: `crates/bacnet-transport/src/sc_hub.rs` (660 lines) — TLS listener, VMAC collision detection, heartbeat tracking, max 256 clients
+- BTL SC tests: `bacnet-btl/src/tests/s09_data_link/sc.rs` — 100 BTL references (9.9.1–9.9.100) for hub connect, failover, VMAC, TLS
+
 ### 4.3 Tailscale BBMD Transport (Fallback)
 
 **Source crate:** `bacnet-transport::bbmd::BbmdState`
@@ -283,6 +327,15 @@ let tls_config = build_client_tls_config(None, Some(client_cert_path), Some(clie
 - FDT is exposed to the web dashboard via REST API
 - `BbmdState::purge_expired()` called on a timer (every 10 seconds)
 - Dashboard polls FDT every 2 seconds
+
+#### Reference
+
+- `BipTransport` struct + BBMD integration: `crates/bacnet-transport/src/bip/mod.rs:47-66` (struct), `:329-358` (start with BBMD setup), `:407-425` (foreign device registration)
+- `BbmdState` (BDT+FDT in-memory): `crates/bacnet-transport/src/bbmd.rs:104-347` — `set_bdt()`, `register_foreign_device()`, `fdt()`, `forwarding_targets()`
+- `FdtEntry`: `:28-33` — fields: `ip`, `port`, `ttl`, `registered_at: Instant`; 30s grace period on expiry
+- Reference binary: `benchmarks/src/bin/bacnet_bbmd.rs` — full BBMD server with BACnet server attached
+- `BipTransport::register_as_foreign_device(config)`: `:121-123` — re-registration timer at TTL/2 interval
+- BTL BVLC/BBMD tests: `bacnet-btl/src/tests/s09_data_link/ipv4.rs` — 72 BTL references (9.3.1–9.3.72) covering Write-BDT, Read-BDT, Register-FD, Read-FDT, Distribute-Broadcast, Forwarded-NPDU
 
 ### 4.4 Manual Transport Switching
 
@@ -384,6 +437,17 @@ impl FdtManager {
     pub fn tick(&mut self) { ... }
 }
 ```
+
+#### Reference
+
+- `BACnetRouter` struct: `crates/bacnet-network/src/router/mod.rs:55-64` — holds `Arc<Mutex<RouterTable>>`, dispatch tasks per port, sender tasks per port, aging task
+- `BACnetRouter::start()`: `:72-373` — validates no duplicate network numbers, registers directly-connected networks, calls `transport.start()` on each port, spawns sender tasks, broadcasts `I-Am-Router-To-Network`, spawns dispatch tasks, starts 60s aging sweep (purges stale learned routes after 5 min)
+- `RouterPort<T>`: `:43-48` — binds `T: TransportPort` to `network_number: u16`
+- `RouterTable`: `crates/bacnet-network/src/router_table.rs:1-619` — `add_direct()`, `add_learned()`, `lookup()`, `purge_stale()`, reachability tracking
+- Forwarding: `crates/bacnet-network/src/router/forwarding.rs` — unicast (decrements hop count, strips DNET/DADR for final hop) and broadcast forwarding
+- Router tests: `crates/bacnet-network/src/router/tests.rs` — tests for 2-port and 3-port forwarding, I-Am-Router announcements, Who-Is-Router handling
+- Reference binary: `benchmarks/src/bin/bacnet_router.rs` — CLI multi-port BIP router (`--ports bip:ip:port:broadcast:network,...`)
+- BTL routing tests: `bacnet-btl/src/tests/s10_network_mgmt/routing.rs` — 81 BTL references (10.1–10.5) for NPDU forwarding, router discovery, connection establishment
 
 ---
 
