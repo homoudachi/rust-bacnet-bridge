@@ -1,4 +1,8 @@
+use std::net::Ipv4Addr;
+
 use bacnet_network::router::{BACnetRouter, RouterPort};
+use bacnet_transport::any::AnyTransport;
+use bacnet_transport::bip::BipTransport;
 use bacnet_transport::loopback::LoopbackTransport;
 use tokio::task::JoinHandle;
 use tracing;
@@ -6,29 +10,52 @@ use tracing;
 use crate::config::BridgeConfig;
 use crate::error::BridgeError;
 use crate::local_device::{self, LocalDeviceConfig};
+use crate::transport::build_remote_transport;
 
 pub struct RunningRouter {
     router: BACnetRouter,
     _local_device_task: JoinHandle<()>,
 }
 
+fn parse_lan_ip(interface: &str) -> Ipv4Addr {
+    if interface.is_empty() {
+        Ipv4Addr::UNSPECIFIED
+    } else {
+        interface
+            .parse()
+            .unwrap_or(Ipv4Addr::UNSPECIFIED)
+    }
+}
+
+fn broadcast_from_ip(ip: Ipv4Addr) -> Ipv4Addr {
+    if ip.is_unspecified() {
+        Ipv4Addr::BROADCAST
+    } else {
+        let octets = ip.octets();
+        Ipv4Addr::new(octets[0], octets[1], octets[2], 255)
+    }
+}
+
 pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, BridgeError> {
-    let (lan_router, lan_device) = LoopbackTransport::pair(
+    let lan_ip = parse_lan_ip(&config.router.lan.interface);
+    let lan_port = config.router.lan.port;
+    let broadcast_addr = broadcast_from_ip(lan_ip);
+
+    let lan_bip = BipTransport::new(lan_ip, lan_port, broadcast_addr);
+    let remote = build_remote_transport(config).await?;
+
+    let (_local_loop_router, local_loop_device) = LoopbackTransport::pair(
         vec![0x01, 0x01],
         vec![0x01, 0x02],
-    );
-    let (remote_router, _remote_device) = LoopbackTransport::pair(
-        vec![0x02, 0x01],
-        vec![0x02, 0x02],
     );
 
     let ports = vec![
         RouterPort {
-            transport: lan_router,
+            transport: AnyTransport::from(lan_bip),
             network_number: 1,
         },
         RouterPort {
-            transport: remote_router,
+            transport: remote,
             network_number: 2,
         },
     ];
@@ -43,10 +70,16 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
         device_name: config.router.device_name.clone(),
     };
 
-    tracing::info!("Starting router with loopback transports (net1=LAN, net2=remote)");
+    tracing::info!(
+        "Router started: LAN {}:{} (broadcast {}), remote transport={}",
+        lan_ip,
+        lan_port,
+        broadcast_addr,
+        config.router.transport,
+    );
 
     let local_task = tokio::spawn(async move {
-        local_device::handle_local_device(local_rx, lan_device, device_config).await;
+        local_device::handle_local_device(local_rx, local_loop_device, device_config).await;
     });
 
     Ok(RunningRouter {
