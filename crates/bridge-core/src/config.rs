@@ -120,6 +120,8 @@ pub struct ScConfig {
     pub client_cert: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ca_cert: Option<String>,
 }
 
 impl Default for ScConfig {
@@ -131,6 +133,7 @@ impl Default for ScConfig {
             reconnect_max_attempts: 0,
             client_cert: None,
             client_key: None,
+            ca_cert: None,
         }
     }
 }
@@ -295,6 +298,7 @@ fn apply_router_override(router: &mut RouterConfig, path: &str, value: &str) {
                 }
                 "client_cert" => router.sc.client_cert = Some(value.to_string()),
                 "client_key" => router.sc.client_key = Some(value.to_string()),
+                "ca_cert" => router.sc.ca_cert = Some(value.to_string()),
                 _ => warn!("Unknown config key: router.sc.{}", parts[1]),
             }
         }

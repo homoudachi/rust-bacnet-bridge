@@ -20,3 +20,6 @@ tokio-rustls = "0.26.4"
 rand = "0.10.1"
 rustls-pemfile = "2.2.0"
 webpki-roots = "1.0.7"
+
+[dev-dependencies]
+rcgen = "0.13"

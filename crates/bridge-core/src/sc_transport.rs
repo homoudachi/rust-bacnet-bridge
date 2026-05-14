@@ -16,9 +16,21 @@ use crate::error::BridgeError;
 pub fn build_client_tls_config(
     client_cert: Option<&str>,
     client_key: Option<&str>,
+    ca_cert: Option<&str>,
 ) -> Result<Arc<rustls::ClientConfig>, BridgeError> {
     let mut root_store = rustls::RootCertStore::empty();
     root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+    if let Some(ca_path) = ca_cert {
+        let ca_bytes = std::fs::read(ca_path)?;
+        let ca_certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut &ca_bytes[..])
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| BridgeError::Transport(format!("Failed to load CA cert from {ca_path}: {e}")))?;
+        let (ca_added, _ignored) = root_store.add_parsable_certificates(ca_certs);
+        if ca_added == 0 {
+            return Err(BridgeError::Transport(format!("No valid CA certs found in {ca_path}")));
+        }
+    }
 
     let builder = rustls::ClientConfig::builder_with_protocol_versions(&[&rustls::version::TLS13]);
     let builder = builder.with_root_certificates(root_store);
@@ -57,7 +69,8 @@ pub async fn build_sc_transport(
     client_cert: Option<&str>,
     client_key: Option<&str>,
 ) -> Result<AnyTransport<NoSerial>, BridgeError> {
-    let tls_config = build_client_tls_config(client_cert, client_key)?;
+    let ca_cert = sc_config.ca_cert.as_deref();
+    let tls_config = build_client_tls_config(client_cert, client_key, ca_cert)?;
 
     let hub_url = if sc_config.hub_url.is_empty() {
         return Err(BridgeError::Transport(
