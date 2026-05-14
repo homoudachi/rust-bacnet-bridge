@@ -242,28 +242,7 @@ pub trait TransportPort: Send + Sync {
 }
 ```
 
-Our bridge-core wraps this in a `Transport` enum:
-
-```rust
-pub enum Transport {
-    /// BACnet/SC via cloud hub (primary)
-    Sc {
-        hub_url: String,
-        tls_config: Arc<ClientConfig>,
-        local_vmac: Vmac,
-        transport: AnyTransport<TlsWebSocket>,
-    },
-    /// Tailscale BBMD + Foreign Device (fallback)
-    Tailscale {
-        bbmd_ip: Ipv4Addr,
-        bbmd_port: u16,
-        lan_ip: Ipv4Addr,
-        lan_port: u16,
-        transport: AnyTransport<BipTransport>,
-        bbmd_state: Arc<Mutex<BbmdState>>,
-    },
-}
-```
+Our bridge-core uses rusty-bacnet's `AnyTransport` directly — no custom enum needed. Port 0 is always `BipTransport` (LAN). Port 1 is built by a single factory function returning `AnyTransport`: `ScTransport<TlsWebSocket>` for SC mode or `BipTransport` with `enable_bbmd()` for Tailscale fallback mode.
 
 #### Reference
 
@@ -361,6 +340,8 @@ The switch is triggered by:
 - System tray: "Switch to Tailscale" / "Switch to BACnet/SC" menu item
 - CLI: `bacnet-bridge router --transport tailscale` or `--transport sc`
 - Not automatic — no health-check-based failover
+- **Packet loss during switch is acceptable.** The switch tears down the old transport before establishing the new one. iComm has its own APDU retry/timeout logic. The operator intentionally triggered the switch and can retry any failed operations.
+- **iComm reconfiguration required.** On Tailscale fallback, iComm's Foreign Device "Public IP address" must be changed from `127.0.0.1` (Laptop Router) to the Site Router's Tailscale IP (direct path, Laptop Router bypassed entirely). This is a separate manual step in iComm — not automated by the binary.
 
 ---
 
@@ -410,14 +391,23 @@ pub async fn start_router(config: &RouterConfig) -> Result<RunningRouter, Bridge
 }
 ```
 
-### 5.2 Broadcast Forwarding
+### 5.2 Local BACnet Device
+
+The `_local_rx` channel returned by `BACnetRouter::start()` delivers NPDUs addressed to DNET=0 (the Router itself). The Router must host a minimal BACnet device (instance from config, default 4194303) that responds to:
+
+- **Network-layer:** Who-Is-Router-To-Network, What-Is-Network-Number, I-Am-Router-To-Network (already sent automatically by `BACnetRouter::start()`)
+- **Application-layer:** Who-Is/I-Am discovery, ReadProperty on Device object (device name, vendor ID, firmware revision, active transport mode)
+
+No COV, alarms, schedules, or other object types — the Router is a forwarding engine, not a BACnet controller.
+
+### 5.3 Broadcast Forwarding
 
 The `BACnetRouter` handles broadcast forwarding automatically:
 - When a Who-Is broadcast arrives on Port 2 (network 2), `BACnetRouter` broadcasts it on Port 1 (network 1)
 - When an I-Am response arrives on Port 1, the router learns the source device's reachability and stores it in the `RouterTable`
 - Subsequent unicast requests are routed directly (not broadcast)
 
-### 5.3 Router Table
+### 5.4 Router Table
 
 The `RouterTable` maintains learned routes:
 - `add_direct(network, port_index)` — directly connected networks (1 and 2)
@@ -425,7 +415,7 @@ The `RouterTable` maintains learned routes:
 - `lookup(network)` — find route for a destination network
 - `purge_stale(max_age)` — remove entries older than threshold
 
-### 5.4 Foreign Device Table (Tailscale Mode Only)
+### 5.5 Foreign Device Table (Tailscale Mode Only)
 
 When operating in Tailscale mode, the BBMD maintains an FDT. This is exposed via:
 
@@ -463,16 +453,20 @@ Full application with web UI + system tray + routing engine.
 bacnet-bridge router [OPTIONS]
   --config <PATH>       Path to config file [default: %APPDATA%\bacnet-bridge\config.toml]
   --transport <MODE>    Override transport: sc | tailscale
+  --with-hub            Start embedded SC Hub alongside the Router (no VPS needed)
   --log-level <LEVEL>   Log level [default: info]
 ```
 
 **Lifecycle:**
-1. Load config from TOML file
+1. Load config or generate default `config.toml` on first run
 2. If running as Windows GUI app, initialize system tray
 3. Start axum web server on configured port
 4. Build and start routing engine
-5. Open browser to dashboard URL (configurable)
-6. Block until exit signal (tray "Exit" or SIGTERM)
+5. If `--with-hub`: start embedded SC Hub listener (self-signed TLS, reuses `[hub]` config section)
+6. Open browser to dashboard URL (configurable)
+7. Block until exit signal (tray "Exit" or SIGTERM)
+
+**Embedded Hub mode** (`--with-hub`): When no cloud VPS Hub is available, the Site Router can simultaneously run as a Hub. The Laptop Router connects as a Spoke directly to the Site Router's embedded Hub (no intermediate cloud). Self-signed TLS only — ACME is not applicable to private facility machines without a public domain. The dashboard shows a "Hub Mode" toggle: "Cloud Hub" (connect as Spoke to external URL) vs. "Embedded Hub" (listen locally, other Spokes connect to you).
 
 ### 6.2 `bacnet-bridge hub`
 
@@ -505,7 +499,10 @@ Web UI only (no routing engine, no tray). Useful for testing the dashboard durin
 bacnet-bridge serve [OPTIONS]
   --port <PORT>     Web server port [default: 28821]
   --host <HOST>     Bind address [default: 127.0.0.1]
+  --dev             Serve assets from filesystem (src/assets/) instead of embedded
 ```
+
+When `--dev` is set, HTML, CSS, and JS are served from the local filesystem so changes appear on browser refresh without rebuilding. Release builds always use embedded assets.
 
 ---
 
@@ -513,12 +510,14 @@ bacnet-bridge serve [OPTIONS]
 
 ### 7.1 Technology Stack
 
+Designed for 2-3 concurrent browser tabs (one technician). No horizontal scaling concerns.
+
 | Layer | Technology |
 |-------|-----------|
 | Server | axum 0.8 + tokio |
-| Static files | rust-embed (embedded at compile time) |
+| Static files | rust-embed (embedded at compile time); `--dev` flag serves from filesystem |
 | Frontend | HTMX 2.0 + vanilla JS |
-| Styling | Tailwind CSS (pinned build, embedded) |
+| Styling | Tailwind CSS (pre-built, committed to repo; no npm/build.rs dependency at compile time) |
 | Live updates | WebSocket (axum ws) + HTMX polling |
 | Icons | Lucide icons (inline SVG, no icon font) |
 
@@ -623,8 +622,12 @@ BACnet Bridge
 
 The tray icon color updates in real-time based on router state:
 - **Green:** BACnet/SC connected to hub + LAN active
-- **Amber:** Tailscale BBMD active + LAN active
-- **Red:** Router stopped or both transports failed
+- **Amber:** SC is reconnecting (within retry budget) OR Tailscale BBMD active + LAN active
+- **Red:** Router stopped, or SC retries exhausted (disconnected), or both transports failed
+
+SC reconnection uses `ScReconnectConfig.max_retries`:
+- If unlimited (0): never auto-declares dead; only goes red on manual stop
+- If finite (N): after N failed reconnection attempts, transitions from amber to red
 
 State is pushed from the routing engine to the tray thread via `tokio::sync::watch`:
 ```rust
@@ -641,6 +644,19 @@ Starting from the tray uses the same code path as starting from the web dashboar
 3. Start `BACnetRouter`
 4. Update state broadcast to all watchers (tray icon, web UI status, log stream)
 
+### 8.5 State Machine Gating
+
+The `AppState` enum enforces legal transitions: `Stopped → Starting → Running → Stopping → Stopped`. Tray menu items and API endpoints are gated:
+
+| State | Start Router | Stop Router | Switch Transport |
+|-------|:---:|:---:|:---:|
+| Stopped | enabled | disabled | disabled |
+| Starting | disabled | disabled | disabled |
+| Running | disabled | enabled | enabled |
+| Stopping | disabled | disabled | disabled |
+
+REST API returns `409 Conflict` for illegal transitions. Tray menu items are dynamically greyed to match current state.
+
 ---
 
 ## 9. Configuration
@@ -652,6 +668,8 @@ Starting from the tray uses the same code path as starting from the web dashboar
 - Linux: `~/.config/bacnet-bridge/config.toml`
 - Override: `--config <PATH>` CLI flag or `BACNET_BRIDGE_CONFIG` env var
 
+**First run:** If no config file exists, a default `config.toml` is auto-generated with sensible defaults (device_id 4194303, transport sc, LAN port 47808, web port 28821). The operator adjusts settings in the dashboard before starting the Router.
+
 ### 9.2 Schema
 
 ```toml
@@ -662,7 +680,7 @@ Starting from the tray uses the same code path as starting from the web dashboar
 transport = "sc"
 
 # BACnet device identity
-device_id = 999
+device_id = 4194303   # Default max to avoid collisions; must be changed before starting
 vendor_id = 15
 device_name = "BACnet-Bridge"
 
@@ -699,13 +717,14 @@ port = 28821
 open_browser = true           # Auto-open dashboard on startup
 
 [hub]
-# Hub mode configuration (only used by `bacnet-bridge hub` subcommand)
-bind = "0.0.0.0:443"
-# TLS: use either static certs or ACME (Let's Encrypt)
+# Hub mode configuration (used by `bacnet-bridge hub` and `--with-hub` flag)
+bind = "0.0.0.0:8443"             # Port 8443 for embedded (avoids admin requirement on Windows)
+# TLS: use either static certs or ACME (Let's Encrypt); self-signed fallback if neither
 # cert = "certs/hub.pem"
 # key = "certs/hub-key.pem"
 acme_domain = "hub.example.com"
 acme_cache = "./acme-cache"
+# Embedded hub (--with-hub) always uses self-signed TLS; ACME not applicable to private facility machines
 ```
 
 ### 9.3 Environment Variable Overrides
@@ -847,7 +866,8 @@ iComm simulator acts as Foreign Device, registers with the BBMD, then sends Who-
 
 **Laptop Router & Site Router:**
 - Our `bacnet-bridge router` binary in a container
-- Configured via environment variables (TOML env overrides)
+- Configured exclusively via environment variables (`BACNET_BRIDGE_` prefix) — no TOML file needed
+- Env-only config is the Docker path; native deployments use TOML + env overrides
 
 #### 11.3.4 E2E Test Cases
 
@@ -866,7 +886,9 @@ iComm simulator acts as Foreign Device, registers with the BBMD, then sends Who-
 
 ### 11.4 BTL Harness Integration
 
-The rusty-bacnet BTL harness provides 3,808 tests that validate BACnet protocol correctness. We will:
+The rusty-bacnet BTL harness contains 3,808 total tests. Only ~253 are router-relevant (BVLC/BBMD/FD §9.3: 72 tests, SC hub/spoke §9.9: 100 tests, NPDU routing §10.1–10.5: 81 tests). BTL runs as a **separate CI job** (not bundled into Docker compose e2e) to isolate rusty-bacnet protocol compliance failures from our business-logic e2e tests.
+
+We will:
 
 1. **Use the `bacnet-test serve` command** to spin up a reference BTL-compliant server (65 objects, all types) as our LAN device simulator
 2. **Run `bacnet-test run --target <router-ip>:47808 --section 9`** to validate BVLC/BBMD/FDT/Broadcast behavior through our router
@@ -922,6 +944,7 @@ cargo build --release --no-default-features --features hub
 ### 12.3 Windows Packaging
 
 - Single `.exe` via static linking (rustls avoids OpenSSL DLL dependency)
+- Docker is NOT used for Site Router or Laptop Router deployment — it requires `--network host` for physical NIC access which doesn't work on Docker Desktop/Windows
 - Embed `.ico` resources via `winres` crate
 - Optional: MSI installer via `cargo wix`
 - Optional: code signing for production distribution
@@ -974,7 +997,25 @@ cargo build --release --no-default-features --features hub
     └── Firewall: allow 443/tcp inbound
 ```
 
-### 13.4 Docker Testing (Developer Machine)
+### 13.4 Embedded Hub (No VPS)
+
+```
+[Site PC running Windows]
+    │
+    ├── BACnet Bridge (--with-hub)
+    │   ├── LAN BIP transport → physical Ethernet → BACnet controllers (network 1)
+    │   ├── Embedded SC Hub → listens on :8443 (self-signed TLS)
+    │   └── SC Spoke (loopback to embedded hub)
+    │
+    └── [Service Laptop]
+        └── BACnet Bridge (Laptop Router)
+            ├── SC Spoke → Site Router's Tailscale IP:8443 (network 2)
+            └── Local BIP transport → iComm (network 1)
+```
+
+No cloud VPS or external Hub required. The Site Router's embedded Hub relays SC frames between connected Spokes. Dashboard toggle: "Hub Mode: Embedded" shows listen address; "Hub Mode: Cloud" shows external Hub URL.
+
+### 13.5 Docker Testing (Developer Machine)
 
 ```
 [Dev PC]
@@ -1048,7 +1089,7 @@ cargo build --release --no-default-features --features hub
 | System tray (pystray) | `tray-item` crate + `.ico` resources |
 | Dynamic tray icon (red/green) | `.ico` swap via `tray-item` |
 | VPN-only log filter | Client-side search filter on log viewer |
-| Windows Firewall instructions | Documentation only (same PowerShell command) |
+| Windows Firewall instructions | OS handles it — Windows pops up firewall dialog on first port bind. No code needed. Documentation only for manual rules. |
 | Single .exe packaging (PyInstaller) | Static linking → single .exe |
 
 ## Appendix B: Terminology

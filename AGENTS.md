@@ -18,11 +18,15 @@ CONTEXT.md defines precise terminology. Use these terms, not casual synonyms:
 ## Architecture (planned, not built)
 
 - Single binary `bacnet-bridge` with subcommands: `router`, `hub`, `serve`
-- Crate split: `bridge-core` (routing engine) + `bridge-app` (binary with web UI, tray, CLI)
+- Crate split: `bridge-core` (routing engine) + binary in workspace `src/` (web UI, tray, CLI)
 - Core routing delegated to `rusty-bacnet`'s `BACnetRouter` with two ports (LAN + remote transport)
+- Port 0: always `BipTransport` (LAN). Port 1: `AnyTransport` — `ScTransport<TlsWebSocket>` or `BipTransport` with BBMD enabled
+- Remote transport built by factory function `build_remote_transport()` — no custom `Transport` enum needed
 - Exactly two transports, one active at a time — switching is manual only (no auto-failover)
-- Web dashboard: axum + HTMX + Tailwind CSS, served from embedded assets
-- System tray: Windows only, `tray-item` crate with green/amber/red `.ico` icons
+- Router has no `role` field; Laptop and Site deployments are identical code paths
+- Embedded Hub mode (`--with-hub`): Site Router runs SC Hub + Router simultaneously (no VPS needed)
+- Web dashboard: axum + HTMX + Tailwind CSS, served from embedded assets (pre-built CSS committed to repo)
+- System tray: Windows only, `tray-item` crate with green/amber/red `.ico` icons; three-state: green=connected, amber=reconnecting/fallback, red=disconnected
 
 ## Source of truth
 
@@ -33,7 +37,7 @@ CONTEXT.md defines precise terminology. Use these terms, not casual synonyms:
 - BACnet/SC is the primary transport; Tailscale BBMD is a fallback for when the cloud Hub is unreachable
 - No automatic transport failover — prevents flapping during intermittent SC connectivity
 - Hub mode requires TLS (static certs, Let's Encrypt ACME, or self-signed for testing)
-- BTL compliance target: 3,808 tests from rusty-bacnet's harness
+- BTL compliance target: ~253 router-relevant tests from rusty-bacnet's harness (BVLC/BBMD §9.3, SC §9.9, NPDU routing §10.1–10.5)
 
 ## When Rust toolchain arrives
 

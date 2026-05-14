@@ -10,7 +10,7 @@ Dual-transport BACnet router bridging local BACnet/IP LAN to remote BACnet netwo
 - Core routing via [rusty-bacnet](https://github.com/jscott3201/rusty-bacnet) `BACnetRouter` with two ports (LAN + remote transport)
 - Web dashboard: axum + HTMX + Tailwind CSS
 - Windows system tray: `tray-item` crate
-- BTL compliance target: 3,808 tests from [rusty-bacnet-btl-harness](https://github.com/jscott3201/rusty-bacnet-btl-harness)
+- BTL compliance target: ~253 router-relevant tests from [rusty-bacnet-btl-harness](https://github.com/jscott3201/rusty-bacnet-btl-harness)
 
 ## Spike
 
