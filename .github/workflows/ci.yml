@@ -58,7 +58,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --features windows-tray
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bacnet-bridge-windows-tray
           path: target/release/bacnet-bridge.exe
@@ -113,7 +113,7 @@ jobs:
           docker compose -f docker/docker-compose.btl-sc.yml logs \
             ${{ (matrix.section == 9 && 'btl-runner-sc') || 'btl-runner-routing' }} \
             > btl-results-section-${{ matrix.section }}.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: btl-results-section-${{ matrix.section }}
