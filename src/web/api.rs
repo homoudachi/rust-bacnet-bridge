@@ -23,6 +23,7 @@ pub struct StatusResponse {
     pub lan_ip: String,
     pub lan_port: u16,
     pub device_id: u32,
+    pub hub_mode: String,
 }
 
 pub async fn status(State(state): State<WebAppState>) -> impl IntoResponse {
@@ -42,6 +43,12 @@ pub async fn status(State(state): State<WebAppState>) -> impl IntoResponse {
         .map(|t| t.elapsed().as_secs())
         .unwrap_or(0);
 
+    let hub_mode = if *state.inner.is_embedded_hub.lock().await {
+        "embedded"
+    } else {
+        "cloud"
+    };
+
     Json(StatusResponse {
         state: current_state.to_string(),
         transport: cfg.router.transport.clone(),
@@ -50,6 +57,7 @@ pub async fn status(State(state): State<WebAppState>) -> impl IntoResponse {
         lan_ip: cfg.router.lan.interface.clone(),
         lan_port: cfg.router.lan.port,
         device_id: cfg.router.device_id,
+        hub_mode: hub_mode.to_string(),
     })
 }
 
@@ -208,6 +216,75 @@ pub async fn get_logs(
     let level = params.level.as_deref();
     let entries = state.inner.logbuf.recent(limit, level);
     Json(entries)
+}
+
+pub async fn hub_status(State(state): State<WebAppState>) -> impl IntoResponse {
+    let listen_addr = state.inner.hub_listen_addr.clone();
+    let spoke_count = *state.inner.hub_spoke_count.lock().await;
+    let mode = if *state.inner.is_embedded_hub.lock().await {
+        "embedded"
+    } else {
+        "cloud"
+    };
+
+    Json(json!({
+        "mode": mode,
+        "listen_addr": listen_addr,
+        "spoke_count": spoke_count,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct HubModeRequest {
+    pub mode: String,
+}
+
+pub async fn hub_mode_switch(
+    State(state): State<WebAppState>,
+    Json(body): Json<HubModeRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if body.mode != "cloud" && body.mode != "embedded" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Invalid mode. Must be 'cloud' or 'embedded'." })),
+        ));
+    }
+
+    let current_state = {
+        let rx = state.inner.state_rx.lock().await;
+        let val = *rx.borrow();
+        val
+    };
+
+    if current_state == AppState::Running {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Cannot switch hub mode while router is running. Stop the router first." })),
+        ));
+    }
+
+    {
+        let mut cfg = state.inner.config.write().await;
+        if body.mode == "embedded" {
+            let cloud_url = cfg.router.sc.hub_url.clone();
+            cfg.router.sc.hub_url = "wss://localhost:8443".to_string();
+            if let Some(ref path) = state.inner.config_path {
+                let _ = cfg.save(std::path::Path::new(path));
+            }
+            *state.inner.cloud_hub_url.lock().await = Some(cloud_url);
+            *state.inner.is_embedded_hub.lock().await = true;
+        } else {
+            if let Some(ref cloud_url) = *state.inner.cloud_hub_url.lock().await {
+                cfg.router.sc.hub_url = cloud_url.clone();
+            }
+            if let Some(ref path) = state.inner.config_path {
+                let _ = cfg.save(std::path::Path::new(path));
+            }
+            *state.inner.is_embedded_hub.lock().await = false;
+        }
+    }
+
+    Ok(Json(json!({ "status": "ok", "mode": body.mode })))
 }
 
 pub async fn ws_logs(

@@ -17,8 +17,9 @@ async fn main() {
         Command::Router {
             config,
             transport,
+            with_hub,
         } => {
-            if let Err(e) = router_cmd::run_router(config, transport).await {
+            if let Err(e) = router_cmd::run_router(config, transport, with_hub).await {
                 eprintln!("Router error: {e}");
                 std::process::exit(1);
             }

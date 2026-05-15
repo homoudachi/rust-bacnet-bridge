@@ -71,7 +71,7 @@ fn build_tls_config(config: &HubConfig) -> Result<ServerConfig, BridgeError> {
     }
 }
 
-fn build_self_signed_tls() -> Result<ServerConfig, BridgeError> {
+pub(crate) fn build_self_signed_tls() -> Result<ServerConfig, BridgeError> {
     let cert = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| BridgeError::Hub(format!("self-signed cert generation failed: {e}")))?;
 

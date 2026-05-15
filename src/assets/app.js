@@ -74,11 +74,73 @@ async function updateStatus() {
         document.getElementById('stat-url').textContent = data.connected_url || '(none)';
         document.getElementById('stat-device-id').textContent = data.device_id || '--';
         document.getElementById('transport-current').textContent = data.transport || '--';
+        document.getElementById('hub-mode-current').textContent = data.hub_mode || '--';
 
         updateStateIndicator(data.state);
         updateTransportButtons(data.state, data.transport);
     } catch (e) {
         // silent
+    }
+}
+
+async function updateHubStatus() {
+    try {
+        const resp = await fetch('/api/hub/status');
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        const hubCard = document.getElementById('hub-card');
+        const addrRow = document.getElementById('hub-addr-row');
+        const spokeRow = document.getElementById('hub-spoke-row');
+
+        document.getElementById('hub-mode-current').textContent = data.mode || '--';
+
+        const btnCloud = document.getElementById('btn-hub-cloud');
+        const btnEmbedded = document.getElementById('btn-hub-embedded');
+
+        if (data.mode === 'embedded') {
+            btnCloud.disabled = false;
+            btnEmbedded.disabled = true;
+            addrRow.style.display = 'flex';
+            spokeRow.style.display = 'flex';
+            document.getElementById('hub-listen-addr').textContent = data.listen_addr || '--';
+            document.getElementById('hub-spoke-count').textContent = data.spoke_count || '0';
+        } else {
+            btnCloud.disabled = true;
+            btnEmbedded.disabled = false;
+            addrRow.style.display = 'none';
+            spokeRow.style.display = 'none';
+        }
+    } catch (e) {
+        // silent
+    }
+}
+
+async function switchHubMode(mode) {
+    const btn = mode === 'cloud' ? document.getElementById('btn-hub-cloud') : document.getElementById('btn-hub-embedded');
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch('/api/hub/mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode }),
+        });
+
+        if (resp.ok) {
+            showToast(`Switched to ${mode} hub mode`, 'success');
+            updateHubStatus();
+        } else if (resp.status === 409) {
+            const err = await resp.json();
+            showToast(err.error || 'Cannot switch while router is running', 'error');
+        } else {
+            const err = await resp.json();
+            showToast(err.error || 'Switch failed', 'error');
+        }
+    } catch (e) {
+        showToast('Network error', 'error');
+    } finally {
+        btn.disabled = false;
     }
 }
 
@@ -471,9 +533,11 @@ async function updateFdt() {
 
 document.addEventListener('DOMContentLoaded', () => {
     updateStatus();
+    updateHubStatus();
     loadInterfaces();
     loadConfig();
     setupWebSocket();
     setInterval(updateStatus, 5000);
+    setInterval(updateHubStatus, 5000);
     setInterval(updateFdt, 2000);
 });

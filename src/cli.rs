@@ -14,6 +14,8 @@ pub enum Command {
         config: Option<String>,
         #[arg(long)]
         transport: Option<String>,
+        #[arg(long)]
+        with_hub: bool,
     },
     Hub {
         #[arg(long)]

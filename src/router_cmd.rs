@@ -2,15 +2,21 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bacnet_transport::sc_frame::Vmac;
+use bacnet_transport::sc_hub::ScHub;
 use bridge_core::{start_router, AppState, BridgeConfig, FdtManager, LogRingBuffer, StateManager};
+use rand::Rng;
 use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio_rustls::TlsAcceptor;
 use tracing;
 
+use crate::hub_cmd;
 use crate::web;
 
 pub async fn run_router(
     config_path: Option<String>,
     transport_override: Option<String>,
+    with_hub: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let path = config_path
         .map(PathBuf::from)
@@ -33,6 +39,50 @@ pub async fn run_router(
     let config = Arc::new(RwLock::new(config));
     let state = StateManager::new();
     state.try_transition(AppState::Starting)?;
+
+    let is_embedded_hub = with_hub;
+    let mut cloud_hub_url: Option<String> = None;
+    let mut hub_listen_addr: Option<String> = None;
+
+    if with_hub {
+        let hub_config = {
+            let cfg = config.read().await;
+            cfg.hub.clone()
+        };
+
+        let tls_config = hub_cmd::build_self_signed_tls()
+            .map_err(|e| format!("Failed to build self-signed TLS for embedded hub: {e}"))?;
+        let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
+        let hub_bind = hub_config.bind.clone();
+
+        let hub_vmac: Vmac = rand::thread_rng().gen();
+
+        tracing::info!("Starting embedded Hub on {}", hub_bind);
+
+        let mut hub = ScHub::start(&hub_bind, tls_acceptor, hub_vmac)
+            .await
+            .map_err(|e| format!("Embedded hub start failed: {e}"))?;
+
+        hub_listen_addr = Some(
+            hub.local_addr()
+                .map(|a| a.to_string())
+                .unwrap_or_else(|| hub_bind.clone()),
+        );
+        tracing::info!("Embedded Hub listening on {}", hub_listen_addr.as_ref().unwrap());
+
+        {
+            let mut cfg = config.write().await;
+            cloud_hub_url = Some(cfg.router.sc.hub_url.clone());
+            cfg.router.sc.hub_url = "wss://localhost:8443".to_string();
+        }
+
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c().await.ok();
+            tracing::info!("Shutdown signal received, stopping embedded hub");
+            hub.stop().await;
+            tracing::info!("Embedded hub stopped");
+        });
+    }
 
     {
         let cfg = config.read().await;
@@ -75,6 +125,9 @@ pub async fn run_router(
         Some(cmd_tx),
         fdt.clone(),
         logbuf.clone(),
+        is_embedded_hub,
+        cloud_hub_url,
+        hub_listen_addr,
     );
 
     let ticker_fdt = fdt.clone();
