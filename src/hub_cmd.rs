@@ -56,11 +56,20 @@ async fn build_tls_config(config: &HubConfig) -> Result<ServerConfig, BridgeErro
         "acme" => {
             #[cfg(feature = "acme")]
             {
-                build_acme_tls(&config.acme_domain, &config.acme_cache).await
+                build_acme_tls(
+                    &config.acme_domain,
+                    &config.acme_cache,
+                    config.acme_production,
+                )
+                .await
             }
             #[cfg(not(feature = "acme"))]
             {
-                let _ = (&config.acme_domain, &config.acme_cache);
+                let _ = (
+                    &config.acme_domain,
+                    &config.acme_cache,
+                    config.acme_production,
+                );
                 Err(BridgeError::Hub(
                     "ACME support not compiled in (enable 'acme' feature)".into(),
                 ))
@@ -134,7 +143,11 @@ fn load_private_key(path: &str) -> Result<PrivateKeyDer<'static>, BridgeError> {
 }
 
 #[cfg(feature = "acme")]
-async fn build_acme_tls(domain: &str, cache_dir: &str) -> Result<ServerConfig, BridgeError> {
+async fn build_acme_tls(
+    domain: &str,
+    cache_dir: &str,
+    use_production: bool,
+) -> Result<ServerConfig, BridgeError> {
     use futures::StreamExt;
     use std::path::PathBuf;
     use tokio_rustls_acme::{caches::DirCache, AcmeConfig};
@@ -143,7 +156,7 @@ async fn build_acme_tls(domain: &str, cache_dir: &str) -> Result<ServerConfig, B
     let config = AcmeConfig::new([domain])
         .contact_push("mailto:admin@example.com")
         .cache(cache)
-        .directory_lets_encrypt(false);
+        .directory_lets_encrypt(use_production);
 
     let mut state = config.state();
     let resolver = state.resolver();
