@@ -105,6 +105,7 @@ pub fn run_web_server(cfg: WebServerConfig) -> JoinHandle<()> {
         app.route("/", axum::routing::get(routes::index))
             .route("/style.css", axum::routing::get(routes::style_css))
             .route("/app.js", axum::routing::get(routes::app_js))
+            .route("/favicon.ico", axum::routing::get(routes::favicon))
     };
 
     let app = app.with_state(shared);

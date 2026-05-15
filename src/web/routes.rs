@@ -37,3 +37,7 @@ pub async fn style_css() -> impl IntoResponse {
 pub async fn app_js() -> impl IntoResponse {
     serve_asset("app.js")
 }
+
+pub async fn favicon() -> impl IntoResponse {
+    serve_asset("favicon.ico")
+}

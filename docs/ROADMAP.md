@@ -2,7 +2,7 @@
 
 ## Status
 
-**Phase:** Phase 6 (polish) — ~98% complete. All five implementation phases built; all polish items completed; all "Next steps" items completed 2026-05-15.
+**Phase:** Phase 6 (polish) — ~99% complete. All five implementation phases built; all polish items completed; all "Next steps" items completed 2026-05-15.
 
 ## Key design decisions (from grilling session)
 

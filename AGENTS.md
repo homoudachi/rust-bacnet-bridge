@@ -2,7 +2,7 @@
 
 ## Current state
 
-~85% complete. All five implementation phases are built; Phase 6 (polish) is in progress.
+~99% complete. All five implementation phases built; Phase 6 (polish) is complete.
 
 **Built and working:**
 - Workspace: root `Cargo.toml` with `crates/bridge-core` + `src/` binary
@@ -14,19 +14,19 @@
 - CLI: `router`, `hub`, `serve` subcommands via clap
 - Embedded Hub mode: `--with-hub` runs SC Hub + Router simultaneously
 - Web dashboard: axum + HTMX + Tailwind CSS, embedded assets (rust-embed)
-- REST API: status, config, FDT, logs, transport switch, WebSocket log streaming
+- REST API: status, config, FDT, logs, transport switch, WebSocket log streaming, hub mode switch, system interface detection
 - Windows system tray: green/amber/red DIB icons, right-click menu, state-gated items
 - Docker: compose topologies for SC, BBMD, and BTL harness
 - CI: GitHub Actions (fmt, clippy, test, docker e2e, BTL on push)
-- Tests: 38 tests (unit + integration) covering config, FDT, routing, SC, BBMD
-
-**Remaining (see `docs/ROADMAP.md` Phase 6):**
-- ACME TLS support for Hub mode (stubbed)
-- Dependabot configuration
-- Release build CI artifact
-- BTL harness CI integration
-- Router Start command (stubbed)
+- Tests: 83 tests (unit + integration) covering config, FDT, routing, SC, BBMD, transport switch, dashboard API
+- ACME TLS support for Hub mode (stubbed, staging-ready)
+- Dependabot configuration (weekly Cargo + GitHub Actions)
+- Release build CI artifact (`bacnet-bridge.exe` upload)
+- BTL harness CI integration (health checks, improved compose)
+- Router Start command (state-gated stop-build-start)
 - Full transport switch cycle (stop-build-start)
+- System interface detection via `get_if_addrs` (runtime, not just config)
+- Dashboard API tests covering status, config, FDT, logs, transport lifecycle, hub mode
 
 ## Domain language
 

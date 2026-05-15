@@ -52,3 +52,4 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Wind
 webbrowser = "1"
 tokio-rustls-acme = { version = "0.9", optional = true }
 futures = { version = "0.3", optional = true }
+get_if_addrs = "0.5"

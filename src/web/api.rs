@@ -134,9 +134,26 @@ pub async fn router_info(State(state): State<WebAppState>) -> impl IntoResponse 
 
 pub async fn interfaces(State(state): State<WebAppState>) -> impl IntoResponse {
     let cfg = state.inner.config.read().await;
+
+    let mut seen_ips = std::collections::HashSet::new();
     let mut interfaces = Vec::new();
 
-    if !cfg.router.lan.interface.is_empty() {
+    // Collect system network interfaces at runtime
+    if let Ok(ifaces) = get_if_addrs::get_if_addrs() {
+        for iface in ifaces {
+            let ip = iface.ip().to_string();
+            if seen_ips.insert(ip.clone()) {
+                interfaces.push(json!({
+                    "name": iface.name.clone(),
+                    "ip": ip.clone(),
+                    "is_tailscale": ip.starts_with("100.")
+                }));
+            }
+        }
+    }
+
+    // Also include configured interfaces if not already in the system list
+    if !cfg.router.lan.interface.is_empty() && !seen_ips.contains(&cfg.router.lan.interface) {
         let ip = &cfg.router.lan.interface;
         interfaces.push(json!({
             "name": "lan",
@@ -145,7 +162,7 @@ pub async fn interfaces(State(state): State<WebAppState>) -> impl IntoResponse {
         }));
     }
 
-    if !cfg.router.tailscale.interface.is_empty() {
+    if !cfg.router.tailscale.interface.is_empty() && !seen_ips.contains(&cfg.router.tailscale.interface) {
         let ip = &cfg.router.tailscale.interface;
         interfaces.push(json!({
             "name": "tailscale",
