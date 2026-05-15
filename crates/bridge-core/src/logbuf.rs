@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize)]
@@ -7,6 +8,8 @@ pub struct LogEntry {
     pub level: String,
     pub target: String,
     pub message: String,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub fields: HashMap<String, serde_json::Value>,
 }
 
 pub struct LogRingBuffer {
@@ -65,6 +68,7 @@ mod tests {
             level: level.into(),
             target: "test".into(),
             message: "test message".into(),
+            fields: HashMap::new(),
         }
     }
 

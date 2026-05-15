@@ -61,6 +61,77 @@ pub async fn status(State(state): State<WebAppState>) -> impl IntoResponse {
     })
 }
 
+#[derive(Serialize)]
+pub struct RouterInfoNetwork {
+    pub network: u8,
+    #[serde(rename = "type")]
+    pub net_type: String,
+    pub ip: String,
+    pub port: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hub_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adapter: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct RouterInfoResponse {
+    pub device_id: u32,
+    pub vendor_id: u16,
+    pub device_name: String,
+    pub networks: Vec<RouterInfoNetwork>,
+}
+
+pub async fn router_info(State(state): State<WebAppState>) -> impl IntoResponse {
+    let cfg = state.inner.config.read().await;
+
+    let mut networks = Vec::new();
+
+    networks.push(RouterInfoNetwork {
+        network: 1,
+        net_type: "LAN".to_string(),
+        ip: cfg.router.lan.interface.clone(),
+        port: cfg.router.lan.port,
+        hub_url: None,
+        adapter: if cfg.router.lan.interface.is_empty() {
+            None
+        } else {
+            Some("lan".to_string())
+        },
+    });
+
+    if cfg.router.transport == "sc" {
+        networks.push(RouterInfoNetwork {
+            network: 2,
+            net_type: "BACnet/SC".to_string(),
+            ip: cfg.router.sc.hub_url.clone(),
+            port: 0,
+            hub_url: Some(cfg.router.sc.hub_url.clone()),
+            adapter: None,
+        });
+    } else {
+        networks.push(RouterInfoNetwork {
+            network: 2,
+            net_type: "Tailscale".to_string(),
+            ip: cfg.router.tailscale.interface.clone(),
+            port: cfg.router.tailscale.port,
+            hub_url: None,
+            adapter: if cfg.router.tailscale.interface.is_empty() {
+                None
+            } else {
+                Some("tailscale".to_string())
+            },
+        });
+    }
+
+    Json(RouterInfoResponse {
+        device_id: cfg.router.device_id,
+        vendor_id: cfg.router.vendor_id,
+        device_name: cfg.router.device_name.clone(),
+        networks,
+    })
+}
+
 pub async fn interfaces(State(state): State<WebAppState>) -> impl IntoResponse {
     let cfg = state.inner.config.read().await;
     let mut interfaces = Vec::new();

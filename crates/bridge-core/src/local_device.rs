@@ -10,6 +10,7 @@ pub struct LocalDeviceConfig {
     pub device_id: u32,
     pub vendor_id: u16,
     pub device_name: String,
+    pub transport_mode: String,
 }
 
 pub async fn handle_local_device(
@@ -154,6 +155,12 @@ async fn handle_read_property(
         13 => {
             rp_apdu.extend_from_slice(&[0x19, 0x0D]);
             rp_apdu.extend_from_slice(&[0x91, 0x18]);
+        }
+        512 => {
+            rp_apdu.extend_from_slice(&[0x1A, 0x02, 0x00]);
+            let mode = config.transport_mode.as_bytes();
+            rp_apdu.extend_from_slice(&[0x75, mode.len() as u8]);
+            rp_apdu.extend_from_slice(mode);
         }
         _ => {
             rp_apdu.extend_from_slice(&[0x19, 0x00]);

@@ -74,6 +74,7 @@ pub fn run_web_server(cfg: WebServerConfig) -> JoinHandle<()> {
 
     let app = Router::new()
         .route("/api/status", axum::routing::get(api::status))
+        .route("/api/router-info", axum::routing::get(api::router_info))
         .route("/api/interfaces", axum::routing::get(api::interfaces))
         .route(
             "/api/config",

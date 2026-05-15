@@ -51,6 +51,33 @@
             </div>
         </div>
 
+        <div id="router-info-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Router Info</h2>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="stat-item">
+                    <span class="stat-label">Device ID</span>
+                    <span class="stat-value font-mono" id="ri-device-id">--</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Vendor ID</span>
+                    <span class="stat-value font-mono" id="ri-vendor-id">--</span>
+                </div>
+            </div>
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-gray-500 border-b">
+                        <th class="pb-2">Network</th>
+                        <th class="pb-2">Type</th>
+                        <th class="pb-2">Address</th>
+                        <th class="pb-2">Port</th>
+                    </tr>
+                </thead>
+                <tbody id="ri-networks-tbody">
+                    <tr><td colspan="4" class="py-4 text-gray-400">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div id="transport-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Transport Control</h2>

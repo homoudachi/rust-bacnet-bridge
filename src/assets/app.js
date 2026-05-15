@@ -509,6 +509,35 @@ async function downloadLogs() {
     }
 }
 
+async function updateRouterInfo() {
+    try {
+        const resp = await fetch('/api/router-info');
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        document.getElementById('ri-device-id').textContent = data.device_id ?? '--';
+        document.getElementById('ri-vendor-id').textContent = data.vendor_id ?? '--';
+
+        const tbody = document.getElementById('ri-networks-tbody');
+        if (!data.networks || data.networks.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-gray-400">No networks configured</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.networks.map(n => {
+            const addr = n.type === 'BACnet/SC' && n.hub_url ? n.hub_url : n.ip || '--';
+            const port = n.type === 'BACnet/SC' ? '' : n.port || '--';
+            return `<tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="py-2">Network ${n.network}</td>
+                <td class="py-2">${n.type}</td>
+                <td class="py-2 font-mono text-sm">${addr}</td>
+                <td class="py-2 font-mono">${port}</td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        // silent
+    }
+}
+
 async function updateFdt() {
     try {
         const resp = await fetch('/api/status');
@@ -533,11 +562,13 @@ async function updateFdt() {
 
 document.addEventListener('DOMContentLoaded', () => {
     updateStatus();
+    updateRouterInfo();
     updateHubStatus();
     loadInterfaces();
     loadConfig();
     setupWebSocket();
     setInterval(updateStatus, 5000);
+    setInterval(updateRouterInfo, 5000);
     setInterval(updateHubStatus, 5000);
     setInterval(updateFdt, 2000);
 });

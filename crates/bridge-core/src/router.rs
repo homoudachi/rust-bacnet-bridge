@@ -64,6 +64,7 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
         device_id: config.router.device_id,
         vendor_id: config.router.vendor_id,
         device_name: config.router.device_name.clone(),
+        transport_mode: config.router.transport.clone(),
     };
 
     tracing::info!(
