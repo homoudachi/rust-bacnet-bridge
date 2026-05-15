@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bridge_core::{AppState, BridgeConfig};
-use tokio::sync::{mpsc, watch, RwLock};
+use bridge_core::{AppState, BridgeConfig, FdtManager, LogRingBuffer};
+use tokio::sync::{mpsc, watch, Mutex, RwLock};
 use tracing;
 
 use crate::web;
@@ -40,6 +40,9 @@ pub async fn run_serve(
     );
     tracing::info!("Config path: {}", path.display());
 
+    let fdt = Arc::new(Mutex::new(FdtManager::new()));
+    let logbuf = Arc::new(LogRingBuffer::new(1000));
+
     let _web_handle = web::run_web_server(
         host,
         port,
@@ -48,6 +51,8 @@ pub async fn run_serve(
         config,
         Some(path),
         Some(_cmd_tx),
+        fdt,
+        logbuf,
     );
 
     tokio::signal::ctrl_c().await?;

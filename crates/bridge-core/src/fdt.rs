@@ -1,3 +1,4 @@
+use serde::Serialize;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bacnet_transport::bbmd::FdtEntry;
@@ -52,7 +53,7 @@ fn is_leap(year: i64) -> bool {
     (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FdtDisplayEntry {
     pub ip: String,
     pub port: u16,
