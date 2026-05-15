@@ -30,5 +30,7 @@ pub enum Command {
     Serve {
         #[arg(long)]
         config: Option<String>,
+        #[arg(long)]
+        dev: bool,
     },
 }

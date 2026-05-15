@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BACnet Bridge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">BACnet Bridge</h1>
+                <p class="text-sm text-gray-500 mt-1">Router Dashboard</p>
+            </div>
+            <div id="state-indicator" class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-gray-400" id="state-dot"></span>
+                <span class="text-sm font-medium text-gray-600" id="state-text">Loading...</span>
+            </div>
+        </div>
+
+        <div id="status-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Status</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="status-grid">
+                <div class="stat-item">
+                    <span class="stat-label">Transport</span>
+                    <span class="stat-value" id="stat-transport">--</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Uptime</span>
+                    <span class="stat-value font-mono" id="stat-uptime">--</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">LAN IP</span>
+                    <span class="stat-value font-mono" id="stat-lan-ip">--</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">LAN Port</span>
+                    <span class="stat-value font-mono" id="stat-lan-port">--</span>
+                </div>
+                <div class="stat-item col-span-2">
+                    <span class="stat-label">Connected URL</span>
+                    <span class="stat-value font-mono text-sm truncate" id="stat-url">--</span>
+                </div>
+                <div class="stat-item col-span-2">
+                    <span class="stat-label">Device ID</span>
+                    <span class="stat-value font-mono" id="stat-device-id">--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div id="transport-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Transport Control</h2>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Current:</span>
+                        <span class="text-sm font-mono font-medium" id="transport-current">--</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-switch-sc"
+                                class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                       border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100
+                                       disabled:opacity-50 disabled:cursor-not-allowed"
+                                onclick="switchTransport('sc')">
+                            Switch to SC
+                        </button>
+                        <button id="btn-switch-tailscale"
+                                class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                       border-green-200 text-green-700 bg-green-50 hover:bg-green-100
+                                       disabled:opacity-50 disabled:cursor-not-allowed"
+                                onclick="switchTransport('tailscale')">
+                            Switch to Tailscale
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-stop"
+                                class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                       border-red-200 text-red-700 bg-red-50 hover:bg-red-100
+                                       disabled:opacity-50 disabled:cursor-not-allowed"
+                                onclick="stopRouter()">
+                            Stop Router
+                        </button>
+                        <button id="btn-start"
+                                class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                       border-green-200 text-green-700 bg-green-50 hover:bg-green-100
+                                       disabled:opacity-50 disabled:cursor-not-allowed"
+                                onclick="startRouter()">
+                            Start Router
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="interfaces-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Network Interfaces</h2>
+                <div id="interfaces-list" class="space-y-2">
+                    <p class="text-sm text-gray-400">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="config-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-800">Configuration</h2>
+                <button id="btn-save-config"
+                        class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700
+                               disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        onclick="saveConfig()">
+                    Save Config
+                </button>
+            </div>
+            <div id="config-form" class="space-y-4">
+                <p class="text-sm text-gray-400">Loading...</p>
+            </div>
+        </div>
+
+        <div id="toast" class="fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium
+                             translate-y-2 opacity-0 transition-all duration-300 pointer-events-none
+                             bg-gray-800">
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
