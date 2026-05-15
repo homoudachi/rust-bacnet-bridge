@@ -215,10 +215,40 @@ pub async fn run_router(
                             continue;
                         }
                         tracing::info!("Transport switch requested: {}", mode);
-                        let mut cfg = config.write().await;
-                        cfg.router.transport = mode;
-                        cfg.save(Path::new(&config_path_str)).ok();
-                        tracing::info!("Transport config saved. Restart router to apply.");
+
+                        if let Some(r) = running.take() {
+                            tracing::info!("Stopping router for transport switch");
+                            state.try_transition(AppState::Stopping).ok();
+                            r.stop().await;
+                            state.try_transition(AppState::Stopped).ok();
+                            tracing::info!("Router stopped");
+                        }
+
+                        {
+                            let mut cfg = config.write().await;
+                            cfg.router.transport = mode.clone();
+                            cfg.save(Path::new(&config_path_str)).ok();
+                            tracing::info!("Transport config saved: {}", mode);
+                        }
+
+                        state.try_transition(AppState::Starting).ok();
+                        let cfg_guard = config.read().await;
+                        match start_router(&cfg_guard).await {
+                            Ok(r) => {
+                                drop(cfg_guard);
+                                running = Some(r);
+                                state.try_transition(AppState::Running).ok();
+                                tracing::info!("Router started with transport: {}", mode);
+                            }
+                            Err(e) => {
+                                drop(cfg_guard);
+                                state.try_transition(AppState::Stopped).ok();
+                                tracing::error!(
+                                    "Failed to start router with transport {}: {e}",
+                                    mode
+                                );
+                            }
+                        }
                     }
                     web::RouterCommand::Exit => {
                         tracing::info!("Exit requested from tray");
