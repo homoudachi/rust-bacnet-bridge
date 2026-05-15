@@ -2,8 +2,8 @@ use std::net::Ipv4Addr;
 use std::sync::Arc;
 
 use bacnet_transport::any::AnyTransport;
-use bacnet_transport::bbmd::BdtEntry as BbmdBdtEntry;
 use bacnet_transport::bbmd::BbmdState;
+use bacnet_transport::bbmd::BdtEntry as BbmdBdtEntry;
 use bacnet_transport::bip::BipTransport;
 use bacnet_transport::mstp::NoSerial;
 use tokio::sync::Mutex;

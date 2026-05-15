@@ -901,16 +901,38 @@ We will:
 
 ### 11.5 MCP Integration for Debugging
 
-The rusty-bacnet MCP server can run as a Docker sidecar during development:
+The rusty-bacnet MCP server runs as a Docker sidecar during development, built from source
+via `docker/Dockerfile.mcp`:
 
 ```yaml
 bacnet-mcp:
-  image: ghcr.io/jscott3201/rusty-bacnet-mcp:latest
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.mcp
+  depends_on:
+    site-router:
+      condition: service_started
+  ports:
+    - "3000:3000"
+  volumes:
+    - ./docker/config/mcp.json:/config/mcp.json:ro
+  environment:
+    - RUST_LOG=info
   command: ["--config", "/config/mcp.json", "--transport", "http", "--bind", "0.0.0.0:3000"]
-  network_mode: host
+  networks:
+    bacnet-net:
+      ipv4_address: 172.20.0.10
 ```
 
-Key tools for debugging: `probe_bbmd` (reads BDT+FDT), `discover_devices` (Who-Is sweep through router), `ping_device` (reachability test), `read_property` (verify read-through).
+The MCP server exposes a streamable-HTTP endpoint at `http://<host>:3000/mcp`.
+Configuration lives in `docker/config/mcp.json` (device instance 389999 on BIP
+network with broadcast `172.20.0.255`).
+
+Key MCP tools for debugging: `discover_devices` (Who-Is sweep through the router),
+`read_property` (read property through the bridge to verify read-through),
+`write_property` (requires `--writes-enabled` flag), `list_known_devices`
+(inspect what the MCP server has discovered), and `bacnet://reference/*` resources
+for in-context BACnet protocol reference.
 
 ---
 

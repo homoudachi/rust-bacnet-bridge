@@ -18,6 +18,9 @@ services:
     environment:
       - BACNET_BRIDGE_HUB__BIND=0.0.0.0:8443
       - RUST_LOG=info
+    networks:
+      default:
+        ipv4_address: 172.20.0.2
 
   site-router:
     build:
@@ -29,11 +32,15 @@ services:
     environment:
       - BACNET_BRIDGE_ROUTER__TRANSPORT=sc
       - BACNET_BRIDGE_ROUTER__SC__HUB_URL=wss://sc-hub:8443
+      - BACNET_BRIDGE_ROUTER__SC__DANGER_ACCEPT_INVALID_CERTS=true
       - BACNET_BRIDGE_ROUTER__LAN__INTERFACE=0.0.0.0
       - BACNET_BRIDGE_ROUTER__LAN__PORT=47808
       - BACNET_BRIDGE_ROUTER__DEVICE_ID=100
       - RUST_LOG=info
     command: ["router"]
+    networks:
+      default:
+        ipv4_address: 172.20.0.3
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:28821/api/status"]
       interval: 5s
@@ -49,6 +56,26 @@ services:
       site-router:
         condition: service_healthy
     command: ["serve", "--bind", "0.0.0.0:47808", "--device-id", "4194303"]
+    networks:
+      default:
+        ipv4_address: 172.20.0.4
+
+  bacnet-mcp:
+    profiles: ["mcp"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mcp
+    depends_on:
+      site-router:
+        condition: service_healthy
+    command: ["--config", "/config/mcp.json", "--transport", "http", "--bind", "0.0.0.0:3000"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config/mcp.json:/config/mcp.json:ro
+    networks:
+      default:
+        ipv4_address: 172.20.0.10
 
   btl-runner-sc:
     profiles: ["section-9"]
@@ -81,3 +108,6 @@ services:
 networks:
   default:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

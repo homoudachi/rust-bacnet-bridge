@@ -135,7 +135,9 @@ async fn bbmd_transport_invalid_ip() {
         bdt: None,
     };
 
-    let result = bridge_core::bbmd_transport::build_bbmd_transport(&config).await.map(|(t, _)| t);
+    let result = bridge_core::bbmd_transport::build_bbmd_transport(&config)
+        .await
+        .map(|(t, _)| t);
     match result {
         Err(e) => {
             let err_msg = format!("{}", e);
@@ -156,7 +158,9 @@ async fn remote_transport_tailscale_dispatch() {
         ..BridgeConfig::default()
     };
 
-    let result = bridge_core::build_remote_transport(&config).await.map(|(t, _)| t);
+    let result = bridge_core::build_remote_transport(&config)
+        .await
+        .map(|(t, _)| t);
     assert!(
         result.is_err(),
         "Expected error from empty tailscale interface"
