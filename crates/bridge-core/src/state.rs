@@ -51,9 +51,7 @@ impl StateManager {
                 | (AppState::Stopping, AppState::Stopped)
         );
         if valid {
-            self.tx
-                .send(to)
-                .map_err(|_| BridgeError::StateSync)?;
+            self.tx.send(to).map_err(|_| BridgeError::StateSync)?;
             Ok(())
         } else {
             Err(BridgeError::InvalidStateTransition {

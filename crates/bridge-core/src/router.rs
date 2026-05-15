@@ -21,9 +21,7 @@ fn parse_lan_ip(interface: &str) -> Ipv4Addr {
     if interface.is_empty() {
         Ipv4Addr::UNSPECIFIED
     } else {
-        interface
-            .parse()
-            .unwrap_or(Ipv4Addr::UNSPECIFIED)
+        interface.parse().unwrap_or(Ipv4Addr::UNSPECIFIED)
     }
 }
 
@@ -44,10 +42,8 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
     let lan_bip = BipTransport::new(lan_ip, lan_port, broadcast_addr);
     let remote = build_remote_transport(config).await?;
 
-    let (_local_loop_router, local_loop_device) = LoopbackTransport::pair(
-        vec![0x01, 0x01],
-        vec![0x01, 0x02],
-    );
+    let (_local_loop_router, local_loop_device) =
+        LoopbackTransport::pair(vec![0x01, 0x01], vec![0x01, 0x02]);
 
     let ports = vec![
         RouterPort {
@@ -95,7 +91,9 @@ impl RunningRouter {
         tracing::info!("Router stopped");
     }
 
-    pub fn table(&self) -> &std::sync::Arc<tokio::sync::Mutex<bacnet_network::router_table::RouterTable>> {
+    pub fn table(
+        &self,
+    ) -> &std::sync::Arc<tokio::sync::Mutex<bacnet_network::router_table::RouterTable>> {
         self.router.table()
     }
 }

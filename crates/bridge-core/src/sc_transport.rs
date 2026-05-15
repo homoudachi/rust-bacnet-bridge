@@ -25,10 +25,14 @@ pub fn build_client_tls_config(
         let ca_bytes = std::fs::read(ca_path)?;
         let ca_certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut &ca_bytes[..])
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| BridgeError::Transport(format!("Failed to load CA cert from {ca_path}: {e}")))?;
+            .map_err(|e| {
+                BridgeError::Transport(format!("Failed to load CA cert from {ca_path}: {e}"))
+            })?;
         let (ca_added, _ignored) = root_store.add_parsable_certificates(ca_certs);
         if ca_added == 0 {
-            return Err(BridgeError::Transport(format!("No valid CA certs found in {ca_path}")));
+            return Err(BridgeError::Transport(format!(
+                "No valid CA certs found in {ca_path}"
+            )));
         }
     }
 

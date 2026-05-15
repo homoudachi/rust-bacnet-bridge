@@ -9,7 +9,7 @@ use tracing::warn;
 
 use crate::error::BridgeError;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct BridgeConfig {
     pub router: RouterConfig,
@@ -54,16 +54,6 @@ impl BridgeConfig {
     pub fn default_config_path() -> PathBuf {
         let base = dirs::config_dir().expect("Could not determine config directory");
         base.join("bacnet-bridge").join("config.toml")
-    }
-}
-
-impl Default for BridgeConfig {
-    fn default() -> Self {
-        Self {
-            router: RouterConfig::default(),
-            web: WebConfig::default(),
-            hub: HubConfig::default(),
-        }
     }
 }
 

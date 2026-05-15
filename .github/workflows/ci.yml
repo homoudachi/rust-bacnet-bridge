@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-targets
+
+  test-windows:
+    name: Test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-targets
+
+  build-windows-tray:
+    name: Build (Windows + tray)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --features windows-tray
+
+  docker-e2e-sc:
+    name: Docker E2E (SC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run SC topology
+        run: |
+          docker compose -f docker/docker-compose.sc.yml build
+          docker compose -f docker/docker-compose.sc.yml up --abort-on-container-exit --exit-code-from icomm-simulator
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose -f docker/docker-compose.sc.yml logs
+
+  docker-e2e-bbmd:
+    name: Docker E2E (BBMD)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run BBMD topology
+        run: |
+          docker compose -f docker/docker-compose.bbmd.yml build
+          docker compose -f docker/docker-compose.bbmd.yml up --abort-on-container-exit --exit-code-from icomm-simulator
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose -f docker/docker-compose.bbmd.yml logs
+
+  btl-tests:
+    name: BTL Compliance Tests
+    runs-on: ubuntu-latest
+    needs: [test]
+    strategy:
+      fail-fast: false
+      matrix:
+        section: [9, 10]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build BTL images
+        run: docker compose -f docker/docker-compose.btl-sc.yml build
+      - name: Run BTL §{{ matrix.section }} tests
+        run: |
+          docker compose -f docker/docker-compose.btl-sc.yml up \
+            --profile section-${{ matrix.section }} \
+            --abort-on-container-exit \
+            --exit-code-from ${{ (matrix.section == 9 && 'btl-runner-sc') || 'btl-runner-routing' }}
+      - name: Collect BTL results
+        if: always()
+        run: |
+          docker compose -f docker/docker-compose.btl-sc.yml logs \
+            ${{ (matrix.section == 9 && 'btl-runner-sc') || 'btl-runner-routing' }} \
+            > btl-results-section-${{ matrix.section }}.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: btl-results-section-${{ matrix.section }}
+          path: btl-results-section-${{ matrix.section }}.log

@@ -6,13 +6,15 @@ use bacnet_network::router::{BACnetRouter, RouterPort};
 use bacnet_transport::any::AnyTransport;
 use bacnet_transport::loopback::LoopbackTransport;
 use bacnet_transport::port::TransportPort;
-use bacnet_transport::sc_hub::ScHub;
 use bacnet_transport::sc_frame::Vmac;
+use bacnet_transport::sc_hub::ScHub;
 use bacnet_types::enums::NetworkPriority;
 use bacnet_types::MacAddr;
-use bytes::{Bytes, BytesMut};
-use bridge_core::config::{BridgeConfig, HubConfig, LanConfig, RouterConfig, ScConfig, TailscaleConfig, WebConfig};
+use bridge_core::config::{
+    BridgeConfig, HubConfig, LanConfig, RouterConfig, ScConfig, TailscaleConfig, WebConfig,
+};
 use bridge_core::transport::build_remote_transport;
+use bytes::{Bytes, BytesMut};
 use tokio_rustls::rustls;
 use tokio_rustls::TlsAcceptor;
 
@@ -29,17 +31,19 @@ async fn test_router_connects_as_sc_spoke() {
     std::fs::write(&cert_path, cert_pem.as_bytes()).unwrap();
     std::fs::write(&key_path, key_pem.as_bytes()).unwrap();
 
-    let cert_der: Vec<rustls::pki_types::CertificateDer> = rustls_pemfile::certs(&mut cert_pem.as_bytes())
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+    let cert_der: Vec<rustls::pki_types::CertificateDer> =
+        rustls_pemfile::certs(&mut cert_pem.as_bytes())
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
     let key_der = rustls_pemfile::private_key(&mut key_pem.as_bytes())
         .unwrap()
         .unwrap();
 
-    let server_config = rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
-        .with_no_client_auth()
-        .with_single_cert(cert_der, key_der)
-        .unwrap();
+    let server_config =
+        rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
+            .with_no_client_auth()
+            .with_single_cert(cert_der, key_der)
+            .unwrap();
     let tls_acceptor = TlsAcceptor::from(Arc::new(server_config));
 
     let hub_vmac: Vmac = [0x00, 0x00, 0x00, 0x00, 0x00, 0x01];

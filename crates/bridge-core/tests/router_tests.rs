@@ -19,8 +19,7 @@ struct TestHarness {
 }
 
 async fn setup() -> TestHarness {
-    let (lan_router, mut lan_device) =
-        LoopbackTransport::pair(vec![0x01, 0x01], vec![0x01, 0x02]);
+    let (lan_router, mut lan_device) = LoopbackTransport::pair(vec![0x01, 0x01], vec![0x01, 0x02]);
     let (remote_router, mut remote_device) =
         LoopbackTransport::pair(vec![0x02, 0x01], vec![0x02, 0x02]);
 
@@ -41,7 +40,9 @@ async fn setup() -> TestHarness {
         },
     ];
 
-    let (router, _local_rx) = BACnetRouter::start(ports).await.expect("BACnetRouter::start");
+    let (router, _local_rx) = BACnetRouter::start(ports)
+        .await
+        .expect("BACnetRouter::start");
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     TestHarness {
@@ -134,7 +135,11 @@ async fn test_who_is_forwarded_net2_to_net1() {
     let decoded = decode_npdu(msg.npdu.clone()).expect("decode");
 
     assert!(decoded.source.is_some(), "forwarded NPDU needs SNET/SADR");
-    assert_eq!(decoded.source.unwrap().network, 2, "source network should be 2");
+    assert_eq!(
+        decoded.source.unwrap().network,
+        2,
+        "source network should be 2"
+    );
 
     h.stop().await;
 }
@@ -154,11 +159,8 @@ async fn test_iam_forwarded_net1_to_net2() {
         source: None,
         hop_count: 255,
         payload: Bytes::from_static(&[
-            0x00, 0x00,
-            0xC4, 0x02, 0x00, 0x00, 0x03, 0xE9,
-            0x22, 0x05, 0xC4,
-            0x91, 0x00,
-            0x22, 0x00, 0x0F,
+            0x00, 0x00, 0xC4, 0x02, 0x00, 0x00, 0x03, 0xE9, 0x22, 0x05, 0xC4, 0x91, 0x00, 0x22,
+            0x00, 0x0F,
         ]),
         ..Npdu::default()
     };
@@ -171,7 +173,11 @@ async fn test_iam_forwarded_net1_to_net2() {
     let decoded = decode_npdu(msg.npdu.clone()).expect("decode");
 
     assert!(decoded.source.is_some(), "forwarded I-Am needs SNET/SADR");
-    assert_eq!(decoded.source.unwrap().network, 1, "source network should be 1");
+    assert_eq!(
+        decoded.source.unwrap().network,
+        1,
+        "source network should be 1"
+    );
 
     h.stop().await;
 }
@@ -194,12 +200,7 @@ async fn test_read_property_unicast_routed() {
         }),
         hop_count: 255,
         payload: Bytes::from_static(&[
-            0x00, 0x0C,
-            0x02, 0x00, 0x00, 0x0C,
-            0x0C,
-            0x00, 0x00, 0x03, 0xE9,
-            0x19, 0x4D,
-            0x0F,
+            0x00, 0x0C, 0x02, 0x00, 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x03, 0xE9, 0x19, 0x4D, 0x0F,
         ]),
         ..Npdu::default()
     };
@@ -212,9 +213,16 @@ async fn test_read_property_unicast_routed() {
     let fwd = h.drain_lan().await;
     let decoded = decode_npdu(fwd.npdu.clone()).expect("decode");
 
-    assert!(decoded.destination.is_none(), "DNET/DADR stripped for direct net");
+    assert!(
+        decoded.destination.is_none(),
+        "DNET/DADR stripped for direct net"
+    );
     assert!(decoded.source.is_some(), "SNET/SADR set");
-    assert_eq!(decoded.source.unwrap().network, 2, "source network should be 2");
+    assert_eq!(
+        decoded.source.unwrap().network,
+        2,
+        "source network should be 2"
+    );
 
     h.stop().await;
 }

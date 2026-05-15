@@ -50,7 +50,7 @@ impl LogRingBuffer {
             .cloned()
             .collect();
         let len = filtered.len();
-        let start = if len > limit { len - limit } else { 0 };
+        let start = len.saturating_sub(limit);
         filtered.into_iter().skip(start).collect()
     }
 }
