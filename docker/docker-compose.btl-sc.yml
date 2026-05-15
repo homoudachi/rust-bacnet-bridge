@@ -32,6 +32,7 @@ services:
     environment:
       - BACNET_BRIDGE_ROUTER__TRANSPORT=sc
       - BACNET_BRIDGE_ROUTER__SC__HUB_URL=wss://sc-hub:8443
+      - BACNET_BRIDGE_ROUTER__SC__DANGER_ACCEPT_INVALID_CERTS=true
       - BACNET_BRIDGE_ROUTER__LAN__INTERFACE=0.0.0.0
       - BACNET_BRIDGE_ROUTER__LAN__PORT=47808
       - BACNET_BRIDGE_ROUTER__DEVICE_ID=100
@@ -71,7 +72,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./docker/config/mcp.json:/config/mcp.json:ro
+      - ./config/mcp.json:/config/mcp.json:ro
     networks:
       default:
         ipv4_address: 172.20.0.10

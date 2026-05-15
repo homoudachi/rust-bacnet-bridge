@@ -112,6 +112,7 @@ pub struct ScConfig {
     pub client_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ca_cert: Option<String>,
+    pub danger_accept_invalid_certs: bool,
 }
 
 impl Default for ScConfig {
@@ -124,6 +125,7 @@ impl Default for ScConfig {
             client_cert: None,
             client_key: None,
             ca_cert: None,
+            danger_accept_invalid_certs: false,
         }
     }
 }
@@ -291,6 +293,9 @@ fn apply_router_override(router: &mut RouterConfig, path: &str, value: &str) {
                 "client_cert" => router.sc.client_cert = Some(value.to_string()),
                 "client_key" => router.sc.client_key = Some(value.to_string()),
                 "ca_cert" => router.sc.ca_cert = Some(value.to_string()),
+                "danger_accept_invalid_certs" => {
+                    router.sc.danger_accept_invalid_certs = value == "true" || value == "1";
+                }
                 _ => warn!("Unknown config key: router.sc.{}", parts[1]),
             }
         }
