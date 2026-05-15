@@ -158,6 +158,21 @@ pub async fn transport_stop(
 pub async fn transport_start(
     State(state): State<WebAppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let current_state = {
+        let rx = state.inner.state_rx.lock().await;
+        let val = *rx.borrow();
+        val
+    };
+
+    if current_state != AppState::Stopped {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(json!({
+                "error": "Cannot start router unless it is in Stopped state"
+            })),
+        ));
+    }
+
     match &state.inner.command_tx {
         Some(tx) => {
             let _ = tx.send(RouterCommand::Start).await;
