@@ -34,13 +34,20 @@ services:
       - BACNET_BRIDGE_ROUTER__DEVICE_ID=100
       - RUST_LOG=info
     command: ["router"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   btl-server:
     build:
       context: ..
       dockerfile: docker/Dockerfile.btl
     depends_on:
-      - site-router
+      site-router:
+        condition: service_healthy
     command: ["serve", "--bind", "0.0.0.0:47808", "--device-id", "4194303"]
 
   btl-runner-sc:
@@ -52,7 +59,7 @@ services:
       sc-hub:
         condition: service_started
       site-router:
-        condition: service_started
+        condition: service_healthy
       btl-server:
         condition: service_started
     command: ["run", "--target", "site-router:47808", "--section", "9", "--format", "json"]
@@ -66,7 +73,7 @@ services:
       sc-hub:
         condition: service_started
       site-router:
-        condition: service_started
+        condition: service_healthy
       btl-server:
         condition: service_started
     command: ["run", "--target", "site-router:47808", "--section", "10", "--format", "json"]

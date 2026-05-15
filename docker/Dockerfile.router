@@ -8,6 +8,6 @@ COPY examples/ examples/
 RUN cargo build --release --no-default-features --features router,hub
 
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates wget
 COPY --from=builder /app/target/release/bacnet-bridge /usr/local/bin/
 ENTRYPOINT ["bacnet-bridge"]
