@@ -120,36 +120,50 @@ pub async fn transport_switch(
         val
     };
 
-    // Running: do full stop-build-start cycle. Stopped: just save config.
-    if current_state == AppState::Running || current_state == AppState::Stopped {
-        let tx = state.inner.command_tx.as_ref().unwrap();
-        let _ = tx
-            .send(RouterCommand::SwitchTransport(body.mode.clone()))
-            .await;
-        Ok(Json(json!({ "status": "ok", "transport": body.mode })))
-    } else {
-        Err((
+    if current_state != AppState::Running {
+        return Err((
             StatusCode::CONFLICT,
             Json(json!({
-                "error": "Cannot switch transport. Router must be Running or Stopped."
+                "error": "Cannot switch transport. Router must be Running."
             })),
-        ))
+        ));
     }
+
+    let tx = state.inner.command_tx.as_ref().unwrap();
+    let _ = tx
+        .send(RouterCommand::SwitchTransport(body.mode.clone()))
+        .await;
+    Ok(Json(json!({ "status": "ok", "transport": body.mode })))
 }
 
 pub async fn transport_stop(
     State(state): State<WebAppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    match &state.inner.command_tx {
-        Some(tx) => {
-            let _ = tx.send(RouterCommand::Stop).await;
-            Ok(Json(json!({ "status": "ok" })))
-        }
-        None => Err((
+    if state.inner.command_tx.is_none() {
+        return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({ "error": "Router control not available in this mode" })),
-        )),
+        ));
     }
+
+    let current_state = {
+        let rx = state.inner.state_rx.lock().await;
+        let val = *rx.borrow();
+        val
+    };
+
+    if current_state != AppState::Running {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(json!({
+                "error": "Cannot stop router unless it is in Running state"
+            })),
+        ));
+    }
+
+    let tx = state.inner.command_tx.as_ref().unwrap();
+    let _ = tx.send(RouterCommand::Stop).await;
+    Ok(Json(json!({ "status": "ok" })))
 }
 
 pub async fn transport_start(

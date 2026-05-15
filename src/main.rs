@@ -21,6 +21,7 @@ async fn main() {
             config,
             transport,
             with_hub,
+            log_level: _,
         } => {
             if let Err(e) = router_cmd::run_router(config, transport, with_hub).await {
                 eprintln!("Router error: {e}");
@@ -58,10 +59,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Command::Serve { config, dev } => {
-            let host = "0.0.0.0";
-            let port = 28821;
-            if let Err(e) = serve_cmd::run_serve(host, port, config, dev).await {
+        Command::Serve {
+            config,
+            dev,
+            port,
+            host,
+        } => {
+            if let Err(e) = serve_cmd::run_serve(&host, port, config, dev).await {
                 eprintln!("Serve error: {e}");
                 std::process::exit(1);
             }

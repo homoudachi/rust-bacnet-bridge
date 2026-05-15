@@ -16,6 +16,8 @@ pub enum Command {
         transport: Option<String>,
         #[arg(long)]
         with_hub: bool,
+        #[arg(long, default_value = "info")]
+        log_level: String,
     },
     Hub {
         #[arg(long)]
@@ -36,5 +38,9 @@ pub enum Command {
         config: Option<String>,
         #[arg(long)]
         dev: bool,
+        #[arg(long, default_value = "28821")]
+        port: u16,
+        #[arg(long, default_value = "0.0.0.0")]
+        host: String,
     },
 }

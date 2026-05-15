@@ -35,7 +35,7 @@ services:
       - RUST_LOG=info
     command: ["router"]
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/status"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:28821/api/status"]
       interval: 5s
       timeout: 3s
       retries: 5
