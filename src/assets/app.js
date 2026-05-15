@@ -78,6 +78,13 @@ async function updateStatus() {
 
         updateStateIndicator(data.state);
         updateTransportButtons(data.state, data.transport);
+
+        const transportLoading = document.getElementById('transport-loading');
+        if (data.state === 'Starting' || data.state === 'Stopping') {
+            transportLoading.classList.remove('hidden');
+        } else {
+            transportLoading.classList.add('hidden');
+        }
     } catch (e) {
         // silent
     }
@@ -419,6 +426,9 @@ function formatFdtTable(entries) {
 }
 
 let logEntries = [];
+let logPaused = false;
+let logBuffer = [];
+let autoScroll = true;
 let wsConnected = false;
 
 function setupWebSocket() {
@@ -434,13 +444,20 @@ function setupWebSocket() {
     ws.onmessage = (event) => {
         try {
             const entries = JSON.parse(event.data);
-            entries.forEach(e => {
-                logEntries.push(e);
-                if (logEntries.length > 500) {
-                    logEntries = logEntries.slice(-500);
+            if (logPaused) {
+                logBuffer.push(...entries);
+                if (logBuffer.length > 500) {
+                    logBuffer = logBuffer.slice(-500);
                 }
-            });
-            renderLogs();
+            } else {
+                entries.forEach(e => {
+                    logEntries.push(e);
+                    if (logEntries.length > 500) {
+                        logEntries = logEntries.slice(-500);
+                    }
+                });
+                renderLogs();
+            }
         } catch (e) {
             // ignore parse errors
         }
@@ -454,6 +471,47 @@ function setupWebSocket() {
     ws.onerror = () => {
         ws.close();
     };
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function highlightText(text, search) {
+    const escaped = escapeHtml(text);
+    const regex = new RegExp('(' + search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    return escaped.replace(regex, '<mark class="bg-yellow-300 text-gray-900 rounded px-0.5">$1</mark>');
+}
+
+function togglePause() {
+    logPaused = !logPaused;
+    const btn = document.getElementById('btn-pause');
+    btn.textContent = logPaused ? 'Resume' : 'Pause';
+    if (!logPaused && logBuffer.length > 0) {
+        logBuffer.forEach(e => {
+            logEntries.push(e);
+            if (logEntries.length > 500) {
+                logEntries = logEntries.slice(-500);
+            }
+        });
+        logBuffer = [];
+        renderLogs();
+    }
+}
+
+function clearLogs() {
+    logEntries = [];
+    logBuffer = [];
+    const viewer = document.getElementById('log-viewer');
+    viewer.innerHTML = '<div class="text-gray-500">Waiting for log entries...</div>';
+}
+
+function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    const indicator = document.getElementById('auto-scroll-indicator');
+    indicator.textContent = autoScroll ? '[Auto-scroll ON]' : '[Auto-scroll OFF]';
 }
 
 function renderLogs() {
@@ -481,10 +539,16 @@ function renderLogs() {
                            e.level === 'WARN' ? 'text-yellow-400' :
                            e.level === 'INFO' ? 'text-gray-100' :
                            'text-gray-400';
-        return `<div class="${colorClass}">[${e.timestamp}] [${e.level}] [${e.target}] ${e.message}</div>`;
+        const ts = escapeHtml(e.timestamp || '');
+        const level = escapeHtml(e.level || '');
+        const target = searchText ? highlightText(e.target || '', searchText) : escapeHtml(e.target || '');
+        const message = searchText ? highlightText(e.message || '', searchText) : escapeHtml(e.message || '');
+        return `<div class="${colorClass}">[${ts}] [${level}] [${target}] ${message}</div>`;
     }).join('');
 
-    viewer.scrollTop = viewer.scrollHeight;
+    if (autoScroll) {
+        viewer.scrollTop = viewer.scrollHeight;
+    }
 }
 
 function filterLogs() {

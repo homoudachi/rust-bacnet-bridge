@@ -33,3 +33,24 @@ label {
 .config-section:last-child {
     @apply border-b-0 pb-0 mb-0;
 }
+
+@keyframes skeleton-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .5; }
+}
+
+.skeleton {
+    animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    background-color: #e5e7eb;
+    border-radius: 0.25rem;
+}
+
+.skeleton-text {
+    height: 1rem;
+    width: 75%;
+}
+
+.skeleton-text-sm {
+    height: 0.75rem;
+    width: 50%;
+}

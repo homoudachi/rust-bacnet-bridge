@@ -16,8 +16,8 @@
                 <p class="text-sm text-gray-500 mt-1">Router Dashboard</p>
             </div>
             <div id="state-indicator" class="flex items-center gap-2">
-                <span class="w-3 h-3 rounded-full bg-gray-400" id="state-dot"></span>
-                <span class="text-sm font-medium text-gray-600" id="state-text">Loading...</span>
+                <span class="w-3 h-3 rounded-full bg-gray-400 animate-pulse" id="state-dot"></span>
+                <span class="text-sm font-medium text-gray-600" id="state-text"><span class="skeleton skeleton-text-sm inline-block"></span></span>
             </div>
         </div>
 
@@ -26,27 +26,27 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="status-grid">
                 <div class="stat-item">
                     <span class="stat-label">Transport</span>
-                    <span class="stat-value" id="stat-transport">--</span>
+                    <span class="stat-value" id="stat-transport"><span class="skeleton skeleton-text"></span></span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-label">Uptime</span>
-                    <span class="stat-value font-mono" id="stat-uptime">--</span>
+                    <span class="stat-value font-mono" id="stat-uptime"><span class="skeleton skeleton-text"></span></span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-label">LAN IP</span>
-                    <span class="stat-value font-mono" id="stat-lan-ip">--</span>
+                    <span class="stat-value font-mono" id="stat-lan-ip"><span class="skeleton skeleton-text-sm"></span></span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-label">LAN Port</span>
-                    <span class="stat-value font-mono" id="stat-lan-port">--</span>
+                    <span class="stat-value font-mono" id="stat-lan-port"><span class="skeleton skeleton-text-sm"></span></span>
                 </div>
                 <div class="stat-item col-span-2">
                     <span class="stat-label">Connected URL</span>
-                    <span class="stat-value font-mono text-sm truncate" id="stat-url">--</span>
+                    <span class="stat-value font-mono text-sm truncate" id="stat-url"><span class="skeleton skeleton-text-sm"></span></span>
                 </div>
                 <div class="stat-item col-span-2">
                     <span class="stat-label">Device ID</span>
-                    <span class="stat-value font-mono" id="stat-device-id">--</span>
+                    <span class="stat-value font-mono" id="stat-device-id"><span class="skeleton skeleton-text"></span></span>
                 </div>
             </div>
         </div>
@@ -56,11 +56,11 @@
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div class="stat-item">
                     <span class="stat-label">Device ID</span>
-                    <span class="stat-value font-mono" id="ri-device-id">--</span>
+                    <span class="stat-value font-mono" id="ri-device-id"><span class="skeleton skeleton-text"></span></span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-label">Vendor ID</span>
-                    <span class="stat-value font-mono" id="ri-vendor-id">--</span>
+                    <span class="stat-value font-mono" id="ri-vendor-id"><span class="skeleton skeleton-text"></span></span>
                 </div>
             </div>
             <table class="w-full text-sm">
@@ -73,7 +73,7 @@
                     </tr>
                 </thead>
                 <tbody id="ri-networks-tbody">
-                    <tr><td colspan="4" class="py-4 text-gray-400">Loading...</td></tr>
+                    <tr><td colspan="4" class="py-4"><span class="skeleton skeleton-text-sm mx-auto block"></span></td></tr>
                 </tbody>
             </table>
         </div>
@@ -84,7 +84,14 @@
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
                         <span class="text-sm text-gray-600">Current:</span>
-                        <span class="text-sm font-mono font-medium" id="transport-current">--</span>
+                        <span class="text-sm font-mono font-medium" id="transport-current"><span class="skeleton skeleton-text-sm inline-block"></span></span>
+                    </div>
+                    <div id="transport-loading" class="hidden flex items-center gap-2 text-sm text-yellow-600">
+                        <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        <span>Transitioning...</span>
                     </div>
                     <div class="flex gap-2">
                         <button id="btn-switch-sc"
@@ -124,7 +131,7 @@
             <div id="interfaces-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Network Interfaces</h2>
                 <div id="interfaces-list" class="space-y-2">
-                    <p class="text-sm text-gray-400">Loading...</p>
+                    <span class="skeleton skeleton-text block"></span>
                 </div>
             </div>
         </div>
@@ -141,7 +148,7 @@
                         </tr>
                     </thead>
                     <tbody id="fdt-tbody">
-                        <tr><td colspan="3" class="py-4 text-gray-400">No foreign devices registered</td></tr>
+                        <tr><td colspan="3" class="py-4 text-gray-400 italic">No foreign devices registered</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -159,8 +166,14 @@
                     </select>
                     <input id="log-search" type="text" placeholder="Search..."
                            class="text-sm border rounded px-2 py-1 w-40" oninput="filterLogs()">
+                    <button id="btn-pause" onclick="togglePause()"
+                            class="text-sm px-3 py-1 border rounded hover:bg-gray-50">Pause</button>
+                    <button onclick="clearLogs()"
+                            class="text-sm px-3 py-1 border rounded hover:bg-gray-50">Clear</button>
                     <button onclick="downloadLogs()"
                             class="text-sm px-3 py-1 border rounded hover:bg-gray-50">Download</button>
+                    <span id="auto-scroll-indicator" onclick="toggleAutoScroll()"
+                          class="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">[Auto-scroll ON]</span>
                 </div>
             </div>
             <div id="log-viewer" class="bg-gray-900 text-gray-100 rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs">
@@ -173,15 +186,15 @@
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
                         <span class="text-sm text-gray-600">Current:</span>
-                        <span class="text-sm font-mono font-medium" id="hub-mode-current">--</span>
+                        <span class="text-sm font-mono font-medium" id="hub-mode-current"><span class="skeleton skeleton-text-sm inline-block"></span></span>
                     </div>
                     <div class="flex items-center justify-between" id="hub-addr-row" style="display:none">
                         <span class="text-sm text-gray-600">Listen Address:</span>
-                        <span class="text-sm font-mono text-gray-700" id="hub-listen-addr">--</span>
+                        <span class="text-sm font-mono text-gray-700" id="hub-listen-addr"><span class="skeleton skeleton-text-sm inline-block"></span></span>
                     </div>
                     <div class="flex items-center justify-between" id="hub-spoke-row" style="display:none">
                         <span class="text-sm text-gray-600">Connected Spokes:</span>
-                        <span class="text-sm font-mono text-gray-700" id="hub-spoke-count">0</span>
+                        <span class="text-sm font-mono text-gray-700" id="hub-spoke-count"><span class="skeleton skeleton-text-sm inline-block"></span></span>
                     </div>
                     <div class="flex gap-2">
                         <button id="btn-hub-cloud"
@@ -213,7 +226,7 @@
                 </button>
             </div>
             <div id="config-form" class="space-y-4">
-                <p class="text-sm text-gray-400">Loading...</p>
+                <span class="skeleton skeleton-text block"></span>
             </div>
         </div>
 
