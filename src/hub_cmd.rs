@@ -67,12 +67,25 @@ fn build_tls_config(config: &HubConfig) -> Result<ServerConfig, BridgeError> {
                 ))
             }
         }
-        _ => build_self_signed_tls(),
+        _ => build_self_signed_tls(&[]),
     }
 }
 
-pub(crate) fn build_self_signed_tls() -> Result<ServerConfig, BridgeError> {
-    let cert = generate_simple_self_signed(vec!["localhost".into()])
+pub(crate) fn build_self_signed_tls(extra_sans: &[&str]) -> Result<ServerConfig, BridgeError> {
+    let mut sans: Vec<String> = vec!["localhost".into()];
+    for s in extra_sans {
+        let s = s.trim();
+        if !s.is_empty() && *s != *"localhost" {
+            sans.push(s.to_string());
+        }
+    }
+    if let Ok(hostname) = std::env::var("HOSTNAME") {
+        let h = hostname.trim().to_string();
+        if !h.is_empty() && h != "localhost" && !sans.contains(&h) {
+            sans.push(h);
+        }
+    }
+    let cert = generate_simple_self_signed(sans)
         .map_err(|e| BridgeError::Hub(format!("self-signed cert generation failed: {e}")))?;
 
     let cert_der: CertificateDer<'static> = cert.cert.der().clone();

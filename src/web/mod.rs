@@ -32,9 +32,12 @@ pub struct WebAppState {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum RouterCommand {
     Stop,
     Start,
+    SwitchTransport(String),
+    Exit,
 }
 
 pub fn run_web_server(
