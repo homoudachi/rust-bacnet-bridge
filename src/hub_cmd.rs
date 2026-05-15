@@ -17,7 +17,7 @@ use bacnet_transport::sc_hub::ScHub;
 
 pub async fn run_hub(config: &HubConfig) -> Result<(), BridgeError> {
     let hub_vmac: Vmac = rand::thread_rng().gen();
-    let tls_config = build_tls_config(config)?;
+    let tls_config = build_tls_config(config).await?;
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
     let bind_addr = config.bind.clone();
 
@@ -47,7 +47,7 @@ pub async fn run_hub(config: &HubConfig) -> Result<(), BridgeError> {
     Ok(())
 }
 
-fn build_tls_config(config: &HubConfig) -> Result<ServerConfig, BridgeError> {
+async fn build_tls_config(config: &HubConfig) -> Result<ServerConfig, BridgeError> {
     match config.tls_strategy() {
         "static" => {
             let cert = config.cert.as_ref().expect("cert path");
@@ -57,7 +57,7 @@ fn build_tls_config(config: &HubConfig) -> Result<ServerConfig, BridgeError> {
         "acme" => {
             #[cfg(feature = "acme")]
             {
-                build_acme_tls(&config.acme_domain, &config.acme_cache)
+                build_acme_tls(&config.acme_domain, &config.acme_cache).await
             }
             #[cfg(not(feature = "acme"))]
             {
@@ -135,7 +135,32 @@ fn load_private_key(path: &str) -> Result<PrivateKeyDer<'static>, BridgeError> {
 }
 
 #[cfg(feature = "acme")]
-fn build_acme_tls(domain: &str, cache_dir: &str) -> Result<ServerConfig, BridgeError> {
-    let _ = (domain, cache_dir);
-    Err(BridgeError::Hub("ACME support not yet implemented".into()))
+async fn build_acme_tls(domain: &str, cache_dir: &str) -> Result<ServerConfig, BridgeError> {
+    use std::path::PathBuf;
+    use tokio_rustls_acme::{AcmeConfig, caches::DirCache};
+    use futures::StreamExt;
+
+    let cache = DirCache::new(PathBuf::from(cache_dir));
+    let config = AcmeConfig::new([domain])
+        .contact_push("mailto:admin@example.com")
+        .cache(cache)
+        .directory_lets_encrypt(false);
+
+    let mut state = config.state();
+    let resolver = state.resolver();
+
+    tokio::spawn(async move {
+        while let Some(event) = state.next().await {
+            match event {
+                Ok(ok) => tracing::info!("ACME event: {:?}", ok),
+                Err(e) => tracing::error!("ACME error: {}", e),
+            }
+        }
+    });
+
+    let server_config = ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
+        .with_no_client_auth()
+        .with_cert_resolver(resolver);
+
+    Ok(server_config)
 }
