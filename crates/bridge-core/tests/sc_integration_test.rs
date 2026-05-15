@@ -78,7 +78,7 @@ async fn test_router_connects_as_sc_spoke() {
         hub: HubConfig::default(),
     };
 
-    let remote = build_remote_transport(&config)
+    let (remote, _bbmd) = build_remote_transport(&config)
         .await
         .expect("build_remote_transport SC");
 

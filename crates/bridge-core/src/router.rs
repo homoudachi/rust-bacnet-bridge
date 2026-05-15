@@ -1,9 +1,12 @@
 use std::net::Ipv4Addr;
+use std::sync::Arc;
 
 use bacnet_network::router::{BACnetRouter, RouterPort};
 use bacnet_transport::any::AnyTransport;
+use bacnet_transport::bbmd::BbmdState;
 use bacnet_transport::bip::BipTransport;
 use bacnet_transport::loopback::LoopbackTransport;
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing;
 
@@ -15,6 +18,7 @@ use crate::transport::build_remote_transport;
 pub struct RunningRouter {
     router: BACnetRouter,
     _local_device_task: JoinHandle<()>,
+    pub bbmd_state: Option<Arc<Mutex<BbmdState>>>,
 }
 
 fn parse_lan_ip(interface: &str) -> Ipv4Addr {
@@ -40,7 +44,7 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
     let broadcast_addr = broadcast_from_ip(lan_ip);
 
     let lan_bip = BipTransport::new(lan_ip, lan_port, broadcast_addr);
-    let remote = build_remote_transport(config).await?;
+    let (remote, bbmd_state) = build_remote_transport(config).await?;
 
     let (_local_loop_router, local_loop_device) =
         LoopbackTransport::pair(vec![0x01, 0x01], vec![0x01, 0x02]);
@@ -82,6 +86,7 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
     Ok(RunningRouter {
         router,
         _local_device_task: local_task,
+        bbmd_state,
     })
 }
 

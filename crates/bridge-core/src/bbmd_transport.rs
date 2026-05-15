@@ -1,9 +1,12 @@
 use std::net::Ipv4Addr;
+use std::sync::Arc;
 
 use bacnet_transport::any::AnyTransport;
 use bacnet_transport::bbmd::BdtEntry as BbmdBdtEntry;
+use bacnet_transport::bbmd::BbmdState;
 use bacnet_transport::bip::BipTransport;
 use bacnet_transport::mstp::NoSerial;
+use tokio::sync::Mutex;
 
 use crate::config::{BdtEntry, TailscaleConfig};
 use crate::error::BridgeError;
@@ -35,7 +38,7 @@ fn convert_bdt_entry(entry: &BdtEntry) -> Result<BbmdBdtEntry, BridgeError> {
 
 pub async fn build_bbmd_transport(
     config: &TailscaleConfig,
-) -> Result<AnyTransport<NoSerial>, BridgeError> {
+) -> Result<(AnyTransport<NoSerial>, Option<Arc<Mutex<BbmdState>>>), BridgeError> {
     let interface: Ipv4Addr = config.interface.parse().map_err(|e| {
         BridgeError::Transport(format!(
             "Invalid Tailscale interface IP '{}': {e}",
@@ -67,5 +70,6 @@ pub async fn build_bbmd_transport(
         );
     }
 
-    Ok(AnyTransport::Bip(transport))
+    let bbmd_handle = transport.bbmd_state().cloned();
+    Ok((AnyTransport::Bip(transport), bbmd_handle))
 }

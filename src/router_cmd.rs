@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use bacnet_transport::sc_frame::Vmac;
 use bacnet_transport::sc_hub::ScHub;
+use bacnet_transport::bbmd::BbmdState;
 use bridge_core::{start_router, AppState, BridgeConfig, FdtManager, LogRingBuffer, StateManager};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
@@ -110,6 +111,31 @@ pub async fn run_router(
     let fdt = Arc::new(Mutex::new(FdtManager::new()));
     let logbuf = Arc::new(LogRingBuffer::new(1000));
 
+    let bbmd_handle: Arc<RwLock<Option<Arc<Mutex<BbmdState>>>>> =
+        Arc::new(RwLock::new(running.as_ref().and_then(|r| r.bbmd_state.clone())));
+
+    {
+        let sync_fdt = fdt.clone();
+        let sync_bbmd = bbmd_handle.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(2));
+            loop {
+                interval.tick().await;
+                if let Some(bbmd) = sync_bbmd.read().await.as_ref() {
+                    let mut state = bbmd.lock().await;
+                    let entries: Vec<([u8; 4], u16, u16)> =
+                        state.fdt().iter().map(|e| (e.ip, e.port, e.ttl)).collect();
+                    drop(state);
+                    let mut fdt_mgr = sync_fdt.lock().await;
+                    for (ip, port, ttl) in entries {
+                        fdt_mgr.add(ip, port, ttl);
+                    }
+                }
+                sync_fdt.lock().await.tick();
+            }
+        });
+    }
+
     let web_host = {
         let cfg = config.read().await;
         cfg.web.host.clone()
@@ -145,15 +171,6 @@ pub async fn run_router(
             crate::tray::run_tray(tray_state_rx, tray_cmd_tx, tray_url, tray_shutdown_rx);
         });
     }
-
-    let ticker_fdt = fdt.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(2));
-        loop {
-            interval.tick().await;
-            ticker_fdt.lock().await.tick();
-        }
-    });
 
     loop {
         tokio::select! {
@@ -197,6 +214,7 @@ pub async fn run_router(
                         match start_router(&cfg_guard).await {
                             Ok(r) => {
                                 drop(cfg_guard);
+                                *bbmd_handle.write().await = r.bbmd_state.clone();
                                 running = Some(r);
                                 state.try_transition(AppState::Running).ok();
                                 tracing::info!("Router started via command");
@@ -235,6 +253,7 @@ pub async fn run_router(
                         match start_router(&cfg_guard).await {
                             Ok(r) => {
                                 drop(cfg_guard);
+                                *bbmd_handle.write().await = r.bbmd_state.clone();
                                 running = Some(r);
                                 state.try_transition(AppState::Running).ok();
                                 tracing::info!("Router started with transport: {}", mode);
