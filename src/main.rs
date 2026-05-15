@@ -33,6 +33,7 @@ async fn main() {
             key,
             acme_domain,
             acme_cache,
+            acme_production,
         } => {
             let mut hub_config = {
                 let bridge = bridge_core::BridgeConfig::generate_default();
@@ -50,6 +51,7 @@ async fn main() {
                 hub_config.acme_domain = d;
             }
             hub_config.acme_cache = acme_cache;
+            hub_config.acme_production = acme_production;
 
             if let Err(e) = hub_cmd::run_hub(&hub_config).await {
                 eprintln!("Hub error: {e}");

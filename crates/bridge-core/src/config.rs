@@ -182,6 +182,7 @@ pub struct HubConfig {
     pub key: Option<String>,
     pub acme_domain: String,
     pub acme_cache: String,
+    pub acme_production: bool,
 }
 
 impl HubConfig {
@@ -204,6 +205,7 @@ impl Default for HubConfig {
             key: None,
             acme_domain: String::new(),
             acme_cache: "./acme-cache".to_string(),
+            acme_production: false,
         }
     }
 }
@@ -335,6 +337,11 @@ fn apply_hub_override(hub: &mut HubConfig, path: &str, value: &str) {
         "key" => hub.key = Some(value.to_string()),
         "acme_domain" => hub.acme_domain = value.to_string(),
         "acme_cache" => hub.acme_cache = value.to_string(),
+        "acme_production" => {
+            if let Ok(v) = value.parse::<bool>() {
+                hub.acme_production = v;
+            }
+        }
         _ => warn!("Unknown config key: hub.{}", path),
     }
 }
@@ -369,6 +376,7 @@ mod tests {
         assert!(config.hub.key.is_none());
         assert_eq!(config.hub.acme_domain, "");
         assert_eq!(config.hub.acme_cache, "./acme-cache");
+        assert!(!config.hub.acme_production);
     }
 
     #[test]
@@ -412,6 +420,20 @@ mod tests {
         assert_eq!(config.hub.key, parsed.hub.key);
         assert_eq!(config.hub.acme_domain, parsed.hub.acme_domain);
         assert_eq!(config.hub.acme_cache, parsed.hub.acme_cache);
+        assert_eq!(config.hub.acme_production, parsed.hub.acme_production);
+    }
+
+    #[test]
+    fn test_acme_production_round_trip() {
+        let mut config = BridgeConfig::generate_default();
+        assert!(!config.hub.acme_production);
+
+        config.hub.acme_production = true;
+        let toml_str = toml::to_string_pretty(&config).expect("serialize");
+        assert!(toml_str.contains("acme_production = true"));
+
+        let parsed: BridgeConfig = toml::from_str(&toml_str).expect("deserialize");
+        assert!(parsed.hub.acme_production);
     }
 
     #[test]
