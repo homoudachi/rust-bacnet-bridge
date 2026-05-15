@@ -123,7 +123,9 @@ pub async fn transport_switch(
     // Running: do full stop-build-start cycle. Stopped: just save config.
     if current_state == AppState::Running || current_state == AppState::Stopped {
         let tx = state.inner.command_tx.as_ref().unwrap();
-        let _ = tx.send(RouterCommand::SwitchTransport(body.mode.clone())).await;
+        let _ = tx
+            .send(RouterCommand::SwitchTransport(body.mode.clone()))
+            .await;
         Ok(Json(json!({ "status": "ok", "transport": body.mode })))
     } else {
         Err((
