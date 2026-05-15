@@ -1,6 +1,6 @@
 ARG BTL_COMMIT=ad874b078eff9c91ae4d89b146f1bd48195b57b7
 
-FROM rust:1.85-alpine AS builder
+FROM rust:1.93-alpine AS builder
 RUN apk add --no-cache musl-dev git
 WORKDIR /btl
 RUN git clone https://github.com/jscott3201/rusty-bacnet-btl-harness.git . \
