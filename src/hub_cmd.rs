@@ -136,9 +136,9 @@ fn load_private_key(path: &str) -> Result<PrivateKeyDer<'static>, BridgeError> {
 
 #[cfg(feature = "acme")]
 async fn build_acme_tls(domain: &str, cache_dir: &str) -> Result<ServerConfig, BridgeError> {
-    use std::path::PathBuf;
-    use tokio_rustls_acme::{AcmeConfig, caches::DirCache};
     use futures::StreamExt;
+    use std::path::PathBuf;
+    use tokio_rustls_acme::{caches::DirCache, AcmeConfig};
 
     let cache = DirCache::new(PathBuf::from(cache_dir));
     let config = AcmeConfig::new([domain])
