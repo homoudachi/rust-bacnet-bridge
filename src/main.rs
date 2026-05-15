@@ -1,6 +1,8 @@
 mod cli;
 mod hub_cmd;
 mod router_cmd;
+mod serve_cmd;
+mod web;
 
 use clap::Parser;
 use cli::{Cli, Command};
@@ -50,8 +52,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Command::Serve { .. } => {
-            println!("Serve subcommand not yet implemented");
+        Command::Serve { config, dev } => {
+            let host = "0.0.0.0";
+            let port = 28821;
+            if let Err(e) = serve_cmd::run_serve(host, port, config, dev).await {
+                eprintln!("Serve error: {e}");
+                std::process::exit(1);
+            }
         }
     }
 }
