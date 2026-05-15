@@ -103,8 +103,9 @@ jobs:
         run: docker compose -f docker/docker-compose.btl-sc.yml build
       - name: Run BTL §{{ matrix.section }} tests
         run: |
-          docker compose -f docker/docker-compose.btl-sc.yml up \
+          docker compose -f docker/docker-compose.btl-sc.yml \
             --profile section-${{ matrix.section }} \
+            up \
             --abort-on-container-exit \
             --exit-code-from ${{ (matrix.section == 9 && 'btl-runner-sc') || 'btl-runner-routing' }}
       - name: Collect BTL results

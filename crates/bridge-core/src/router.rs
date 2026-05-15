@@ -46,7 +46,7 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
     let lan_bip = BipTransport::new(lan_ip, lan_port, broadcast_addr);
     let (remote, bbmd_state) = build_remote_transport(config).await?;
 
-    let (_local_loop_router, local_loop_device) =
+    let (local_loop_router, local_loop_device) =
         LoopbackTransport::pair(vec![0x01, 0x01], vec![0x01, 0x02]);
 
     let ports = vec![
@@ -57,6 +57,10 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
         RouterPort {
             transport: remote,
             network_number: 2,
+        },
+        RouterPort {
+            transport: AnyTransport::from(local_loop_router),
+            network_number: 0,
         },
     ];
 

@@ -101,7 +101,7 @@ pub fn run_tray(
 
     let icons = Arc::new(TrayIcons::new());
 
-    tray.set_icon(IconSource::RawIcon(icons.red)).ok();
+    tray.set_icon(IconSource::RawIcon(icons.red as isize)).ok();
     tray.inner_mut().set_tooltip("BACnet Bridge - Stopped").ok();
 
     let tray = Arc::new(Mutex::new(tray));
@@ -193,7 +193,7 @@ pub fn run_tray(
                 AppState::Stopped => "BACnet Bridge - Stopped",
             };
             if let Ok(mut guard) = tray_watch.lock() {
-                guard.set_icon(IconSource::RawIcon(hicon)).ok();
+                guard.set_icon(IconSource::RawIcon(hicon as isize)).ok();
                 guard.inner_mut().set_tooltip(label).ok();
             }
         }

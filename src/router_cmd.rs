@@ -146,6 +146,9 @@ pub async fn run_router(
         cfg.web.port
     };
 
+    #[cfg(feature = "windows-tray")]
+    let tray_url = format!("http://{}:{}", web_host, web_port);
+
     let _web_handle = web::run_web_server(web::WebServerConfig {
         host: web_host,
         port: web_port,
@@ -167,7 +170,6 @@ pub async fn run_router(
     {
         let tray_state_rx = state.subscribe();
         let tray_cmd_tx = cmd_tx.clone();
-        let tray_url = format!("http://{}:{}", web_host, web_port);
         std::thread::spawn(move || {
             crate::tray::run_tray(tray_state_rx, tray_cmd_tx, tray_url, tray_shutdown_rx);
         });
