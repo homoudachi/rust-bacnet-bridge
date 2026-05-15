@@ -3,9 +3,9 @@ pub mod config;
 pub mod error;
 pub mod fdt;
 pub mod local_device;
+pub mod logbuf;
 pub mod router;
 pub mod sc_transport;
-pub mod logbuf;
 pub mod state;
 pub mod transport;
 

@@ -17,7 +17,10 @@ pub async fn handle_local_device(
     mut lan_transport: impl TransportPort,
     config: LocalDeviceConfig,
 ) {
-    tracing::info!("Local BACnet device started (instance {})", config.device_id);
+    tracing::info!(
+        "Local BACnet device started (instance {})",
+        config.device_id
+    );
 
     while let Some(msg) = local_rx.recv().await {
         let apdu = &msg.apdu;
@@ -62,10 +65,7 @@ async fn send_iam(
     }
     apdu.extend_from_slice(&id_bytes);
 
-    apdu.extend_from_slice(&[
-        0x22, 0x05, 0xC4,
-        0x91, 0x00,
-    ]);
+    apdu.extend_from_slice(&[0x22, 0x05, 0xC4, 0x91, 0x00]);
 
     let vendor_id = config.vendor_id;
     apdu.extend_from_slice(&[0x22, (vendor_id >> 8) as u8, vendor_id as u8]);

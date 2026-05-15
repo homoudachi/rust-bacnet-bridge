@@ -40,32 +40,34 @@ pub enum RouterCommand {
     Exit,
 }
 
-pub fn run_web_server(
-    host: &str,
-    port: u16,
-    dev: bool,
-    state_rx: watch::Receiver<AppState>,
-    config: Arc<RwLock<BridgeConfig>>,
-    config_path: Option<PathBuf>,
-    command_tx: Option<mpsc::Sender<RouterCommand>>,
-    fdt: Arc<tokio::sync::Mutex<FdtManager>>,
-    logbuf: Arc<LogRingBuffer>,
-    is_embedded_hub: bool,
-    cloud_hub_url: Option<String>,
-    hub_listen_addr: Option<String>,
-) -> JoinHandle<()> {
+pub struct WebServerConfig {
+    pub host: String,
+    pub port: u16,
+    pub dev: bool,
+    pub state_rx: watch::Receiver<AppState>,
+    pub config: Arc<RwLock<BridgeConfig>>,
+    pub config_path: Option<PathBuf>,
+    pub command_tx: Option<mpsc::Sender<RouterCommand>>,
+    pub fdt: Arc<tokio::sync::Mutex<FdtManager>>,
+    pub logbuf: Arc<LogRingBuffer>,
+    pub is_embedded_hub: bool,
+    pub cloud_hub_url: Option<String>,
+    pub hub_listen_addr: Option<String>,
+}
+
+pub fn run_web_server(cfg: WebServerConfig) -> JoinHandle<()> {
     let shared = WebAppState {
         inner: Arc::new(WebAppStateInner {
-            state_rx: Mutex::new(state_rx),
-            config,
-            config_path: config_path.map(|p| p.to_string_lossy().to_string()),
+            state_rx: Mutex::new(cfg.state_rx),
+            config: cfg.config,
+            config_path: cfg.config_path.map(|p| p.to_string_lossy().to_string()),
             start_time: Mutex::new(Some(Instant::now())),
-            command_tx,
-            fdt,
-            logbuf,
-            is_embedded_hub: tokio::sync::Mutex::new(is_embedded_hub),
-            cloud_hub_url: tokio::sync::Mutex::new(cloud_hub_url),
-            hub_listen_addr,
+            command_tx: cfg.command_tx,
+            fdt: cfg.fdt,
+            logbuf: cfg.logbuf,
+            is_embedded_hub: tokio::sync::Mutex::new(cfg.is_embedded_hub),
+            cloud_hub_url: tokio::sync::Mutex::new(cfg.cloud_hub_url),
+            hub_listen_addr: cfg.hub_listen_addr,
             hub_spoke_count: tokio::sync::Mutex::new(0),
         }),
     };
@@ -77,16 +79,25 @@ pub fn run_web_server(
             "/api/config",
             axum::routing::get(api::get_config).put(api::update_config),
         )
-        .route("/api/transport/switch", axum::routing::post(api::transport_switch))
-        .route("/api/transport/stop", axum::routing::post(api::transport_stop))
-        .route("/api/transport/start", axum::routing::post(api::transport_start))
+        .route(
+            "/api/transport/switch",
+            axum::routing::post(api::transport_switch),
+        )
+        .route(
+            "/api/transport/stop",
+            axum::routing::post(api::transport_stop),
+        )
+        .route(
+            "/api/transport/start",
+            axum::routing::post(api::transport_start),
+        )
         .route("/api/hub/status", axum::routing::get(api::hub_status))
         .route("/api/hub/mode", axum::routing::post(api::hub_mode_switch))
         .route("/api/fdt", axum::routing::get(api::get_fdt))
         .route("/api/logs", axum::routing::get(api::get_logs))
         .route("/ws/logs", axum::routing::get(api::ws_logs));
 
-    let app = if dev {
+    let app = if cfg.dev {
         let assets_path = format!("{}/assets", env!("CARGO_MANIFEST_DIR"));
         app.nest_service("/", ServeDir::new(&assets_path))
     } else {
@@ -97,7 +108,7 @@ pub fn run_web_server(
 
     let app = app.with_state(shared);
 
-    let addr = format!("{}:{}", host, port);
+    let addr = format!("{}:{}", cfg.host, cfg.port);
     tokio::spawn(async move {
         let listener = tokio::net::TcpListener::bind(&addr)
             .await

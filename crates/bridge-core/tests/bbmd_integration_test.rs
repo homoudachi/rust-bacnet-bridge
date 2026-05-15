@@ -1,9 +1,8 @@
+use bacnet_transport::port::TransportPort;
 use bridge_core::config::{BdtEntry, BridgeConfig, RouterConfig, TailscaleConfig};
 use bridge_core::fdt::FdtManager;
 use bridge_core::FdtDisplayEntry;
-use bacnet_transport::port::TransportPort;
 use std::time::Duration;
-use tokio;
 
 /// Test FDT lifecycle: add, list, verify entry, remove.
 #[tokio::test]
@@ -36,7 +35,10 @@ async fn fdt_ttl_expiry() {
     {
         let list = mgr.list();
         let remaining = list[0].remaining_ttl;
-        assert!(remaining > 0 && remaining <= 2, "remaining_ttl was {remaining}");
+        assert!(
+            remaining > 0 && remaining <= 2,
+            "remaining_ttl was {remaining}"
+        );
     }
 
     mgr.add([10, 0, 0, 51], 47808, 0);
@@ -46,7 +48,11 @@ async fn fdt_ttl_expiry() {
     // Since TTL=0, grace=30: after 1s, entry still alive.
     tokio::time::sleep(Duration::from_millis(1100)).await;
     mgr.tick();
-    assert_eq!(mgr.len(), 1, "Entry with TTL=0 should survive 1s (grace=30s)");
+    assert_eq!(
+        mgr.len(),
+        1,
+        "Entry with TTL=0 should survive 1s (grace=30s)"
+    );
 }
 
 /// Test that multiple FDs can be registered.
@@ -151,5 +157,8 @@ async fn remote_transport_tailscale_dispatch() {
     };
 
     let result = bridge_core::build_remote_transport(&config).await;
-    assert!(result.is_err(), "Expected error from empty tailscale interface");
+    assert!(
+        result.is_err(),
+        "Expected error from empty tailscale interface"
+    );
 }

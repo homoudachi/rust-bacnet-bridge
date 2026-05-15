@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use bridge_core::{AppState, BridgeConfig, FdtManager, LogRingBuffer};
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
-use tracing;
 
 use crate::web;
 
@@ -43,20 +42,20 @@ pub async fn run_serve(
     let fdt = Arc::new(Mutex::new(FdtManager::new()));
     let logbuf = Arc::new(LogRingBuffer::new(1000));
 
-    let _web_handle = web::run_web_server(
-        host,
+    let _web_handle = web::run_web_server(web::WebServerConfig {
+        host: host.to_string(),
         port,
         dev,
         state_rx,
         config,
-        Some(path),
-        Some(_cmd_tx),
+        config_path: Some(path),
+        command_tx: Some(_cmd_tx),
         fdt,
         logbuf,
-        false,
-        None,
-        None,
-    );
+        is_embedded_hub: false,
+        cloud_hub_url: None,
+        hub_listen_addr: None,
+    });
 
     tokio::signal::ctrl_c().await?;
     tracing::info!("Shutting down web server");

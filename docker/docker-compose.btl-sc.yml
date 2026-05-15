@@ -1,0 +1,76 @@
+# BTL compliance test topology (FSD §11.4 — VS14)
+#
+# Topology:
+#   btl-runner ──BIP── site-router ──SC── sc-hub
+#                              │
+#                         btl-server (BTL reference device)
+#
+# Profiles: use --profile section-9 or --profile section-10 in CI
+# to run only the relevant BTL test runner.
+
+version: "3.8"
+
+services:
+  sc-hub:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.hub
+    environment:
+      - BACNET_BRIDGE_HUB__BIND=0.0.0.0:8443
+      - RUST_LOG=info
+
+  site-router:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.router
+    depends_on:
+      sc-hub:
+        condition: service_started
+    environment:
+      - BACNET_BRIDGE_ROUTER__TRANSPORT=sc
+      - BACNET_BRIDGE_ROUTER__SC__HUB_URL=wss://sc-hub:8443
+      - BACNET_BRIDGE_ROUTER__LAN__INTERFACE=0.0.0.0
+      - BACNET_BRIDGE_ROUTER__LAN__PORT=47808
+      - BACNET_BRIDGE_ROUTER__DEVICE_ID=100
+      - RUST_LOG=info
+    command: ["router"]
+
+  btl-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.btl
+    depends_on:
+      - site-router
+    command: ["serve", "--bind", "0.0.0.0:47808", "--device-id", "4194303"]
+
+  btl-runner-sc:
+    profiles: ["section-9"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.btl
+    depends_on:
+      sc-hub:
+        condition: service_started
+      site-router:
+        condition: service_started
+      btl-server:
+        condition: service_started
+    command: ["run", "--target", "site-router:47808", "--section", "9", "--format", "json"]
+
+  btl-runner-routing:
+    profiles: ["section-10"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.btl
+    depends_on:
+      sc-hub:
+        condition: service_started
+      site-router:
+        condition: service_started
+      btl-server:
+        condition: service_started
+    command: ["run", "--target", "site-router:47808", "--section", "10", "--format", "json"]
+
+networks:
+  default:
+    driver: bridge

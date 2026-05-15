@@ -89,7 +89,8 @@ pub(crate) fn build_self_signed_tls(extra_sans: &[&str]) -> Result<ServerConfig,
         .map_err(|e| BridgeError::Hub(format!("self-signed cert generation failed: {e}")))?;
 
     let cert_der: CertificateDer<'static> = cert.cert.der().clone();
-    let key_der: PrivateKeyDer<'static> = PrivatePkcs8KeyDer::from(cert.signing_key.serialize_der()).into();
+    let key_der: PrivateKeyDer<'static> =
+        PrivatePkcs8KeyDer::from(cert.signing_key.serialize_der()).into();
 
     let config = ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
         .with_no_client_auth()
@@ -125,13 +126,12 @@ fn load_private_key(path: &str) -> Result<PrivateKeyDer<'static>, BridgeError> {
     let mut reader = BufReader::new(file);
 
     if let Some(key) = rustls_pemfile::private_key(&mut reader)
-        .map_err(|e| BridgeError::Hub(format!("failed to parse key from {path}: {e}")))? {
+        .map_err(|e| BridgeError::Hub(format!("failed to parse key from {path}: {e}")))?
+    {
         return Ok(key);
     }
 
-    Err(BridgeError::Hub(format!(
-        "no private key found in {path}"
-    )))
+    Err(BridgeError::Hub(format!("no private key found in {path}")))
 }
 
 #[cfg(feature = "acme")]

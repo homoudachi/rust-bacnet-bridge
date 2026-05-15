@@ -6,12 +6,10 @@ use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot, watch};
 use tray_item::{IconSource, TrayItem};
-use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateIconFromResource, DestroyIcon, HICON,
-};
+use windows_sys::Win32::UI::WindowsAndMessaging::{CreateIconFromResource, DestroyIcon, HICON};
 
-use bridge_core::AppState;
 use crate::web::RouterCommand;
+use bridge_core::AppState;
 
 fn make_dib_data(r: u8, g: u8, b: u8) -> Vec<u8> {
     let width: u32 = 32;
@@ -98,8 +96,8 @@ pub fn run_tray(
     web_url: String,
     mut shutdown_rx: oneshot::Receiver<()>,
 ) {
-    let mut tray = TrayItem::new("BACnet Bridge", IconSource::Resource(""))
-        .expect("create tray item");
+    let mut tray =
+        TrayItem::new("BACnet Bridge", IconSource::Resource("")).expect("create tray item");
 
     let icons = Arc::new(TrayIcons::new());
 
@@ -158,8 +156,7 @@ pub fn run_tray(
         let mut t = tray.lock().unwrap();
         let tx = command_tx.clone();
         t.add_menu_item("Switch to Tailscale", move || {
-            let _ =
-                tx.try_send(RouterCommand::SwitchTransport("tailscale".into()));
+            let _ = tx.try_send(RouterCommand::SwitchTransport("tailscale".into()));
         })
         .ok();
     }
@@ -192,9 +189,7 @@ pub fn run_tray(
             let hicon = icons_watch.for_state(app_state);
             let label = match app_state {
                 AppState::Running => "BACnet Bridge - Running",
-                AppState::Starting | AppState::Stopping => {
-                    "BACnet Bridge - Reconnecting"
-                }
+                AppState::Starting | AppState::Stopping => "BACnet Bridge - Reconnecting",
                 AppState::Stopped => "BACnet Bridge - Stopped",
             };
             if let Ok(mut guard) = tray_watch.lock() {

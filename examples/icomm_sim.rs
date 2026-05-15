@@ -34,7 +34,7 @@ fn is_iam_apdu(apdu: &[u8]) -> bool {
     }
     let pdu_type = apdu[0] >> 4;
     let service = apdu[1];
-    (pdu_type == 0x01 && service == 0x00) || (pdu_type == 0x00 && service == 0x00)
+    (pdu_type == 0x00 || pdu_type == 0x01) && service == 0x00
 }
 
 fn extract_device_id(apdu: &[u8]) -> Option<u32> {
@@ -114,11 +114,13 @@ async fn main() {
         .parse()
         .expect("BACNET_DEVICE_PORT must be a u16");
     let bind_ip = resolve_ip(&env::var("BACNET_DEVICE_BIND").unwrap_or_else(|_| "0.0.0.0".into()));
-    let broadcast_ip =
-        resolve_ip(&env::var("BACNET_DEVICE_BROADCAST").unwrap_or_else(|_| "255.255.255.255".into()));
+    let broadcast_ip = resolve_ip(
+        &env::var("BACNET_DEVICE_BROADCAST").unwrap_or_else(|_| "255.255.255.255".into()),
+    );
 
     let target_mode = env::var("BACNET_TEST_TARGET").unwrap_or_else(|_| "sc".into());
-    let target_ip = resolve_ip(&env::var("BACNET_TEST_TARGET_IP").unwrap_or_else(|_| "0.0.0.0".into()));
+    let target_ip =
+        resolve_ip(&env::var("BACNET_TEST_TARGET_IP").unwrap_or_else(|_| "0.0.0.0".into()));
     let target_port: u16 = env::var("BACNET_TEST_TARGET_PORT")
         .unwrap_or_else(|_| "47809".into())
         .parse()
@@ -174,12 +176,7 @@ async fn main() {
                             let (ip, port) = mac_to_ip_port(received.source_mac.as_ref());
                             if !found_devices.contains(&id) {
                                 found_devices.push(id);
-                                tracing::info!(
-                                    "I-Am from device {} (source {}:{})",
-                                    id,
-                                    ip,
-                                    port
-                                );
+                                tracing::info!("I-Am from device {} (source {}:{})", id, ip, port);
                             }
                         }
                     }

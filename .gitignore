@@ -18,6 +18,9 @@ build/
 .vscode/
 .idea/
 
+# opencode
+opencode.json
+
 # OS
 .DS_Store
 Thumbs.db

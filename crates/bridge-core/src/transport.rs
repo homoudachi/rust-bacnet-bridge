@@ -4,7 +4,9 @@ use crate::sc_transport::build_sc_transport;
 use bacnet_transport::any::AnyTransport;
 use bacnet_transport::mstp::NoSerial;
 
-pub async fn build_remote_transport(config: &BridgeConfig) -> Result<AnyTransport<NoSerial>, BridgeError> {
+pub async fn build_remote_transport(
+    config: &BridgeConfig,
+) -> Result<AnyTransport<NoSerial>, BridgeError> {
     match config.router.transport.as_str() {
         "sc" => {
             let sc = &config.router.sc;

@@ -12,13 +12,11 @@ struct Assets;
 fn serve_asset(path: &str) -> impl IntoResponse {
     match Assets::get(path) {
         Some(content) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream().to_string();
+            let mime = mime_guess::from_path(path)
+                .first_or_octet_stream()
+                .to_string();
             let body = Bytes::copy_from_slice(&content.data);
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, mime)],
-                body,
-            )
+            (StatusCode::OK, [(header::CONTENT_TYPE, mime)], body)
         }
         None => (
             StatusCode::NOT_FOUND,

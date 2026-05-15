@@ -9,7 +9,6 @@ use bridge_core::{start_router, AppState, BridgeConfig, FdtManager, LogRingBuffe
 use rand::Rng;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
-use tracing;
 
 use crate::hub_cmd;
 use crate::web;
@@ -71,7 +70,10 @@ pub async fn run_router(
                 .map(|a| a.to_string())
                 .unwrap_or_else(|| hub_bind.clone()),
         );
-        tracing::info!("Embedded Hub listening on {}", hub_listen_addr.as_ref().unwrap());
+        tracing::info!(
+            "Embedded Hub listening on {}",
+            hub_listen_addr.as_ref().unwrap()
+        );
 
         {
             let mut cfg = config.write().await;
@@ -118,20 +120,20 @@ pub async fn run_router(
         cfg.web.port
     };
 
-    let _web_handle = web::run_web_server(
-        &web_host,
-        web_port,
-        false,
+    let _web_handle = web::run_web_server(web::WebServerConfig {
+        host: web_host,
+        port: web_port,
+        dev: false,
         state_rx,
-        config.clone(),
-        Some(path),
-        Some(cmd_tx.clone()),
-        fdt.clone(),
-        logbuf.clone(),
+        config: config.clone(),
+        config_path: Some(path),
+        command_tx: Some(cmd_tx.clone()),
+        fdt: fdt.clone(),
+        logbuf: logbuf.clone(),
         is_embedded_hub,
         cloud_hub_url,
         hub_listen_addr,
-    );
+    });
 
     #[cfg(feature = "windows-tray")]
     let (tray_shutdown_tx, tray_shutdown_rx) = tokio::sync::oneshot::channel::<()>();

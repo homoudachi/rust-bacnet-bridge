@@ -259,7 +259,9 @@ pub async fn hub_mode_switch(
     if current_state == AppState::Running {
         return Err((
             StatusCode::CONFLICT,
-            Json(json!({ "error": "Cannot switch hub mode while router is running. Stop the router first." })),
+            Json(
+                json!({ "error": "Cannot switch hub mode while router is running. Stop the router first." }),
+            ),
         ));
     }
 
@@ -287,10 +289,7 @@ pub async fn hub_mode_switch(
     Ok(Json(json!({ "status": "ok", "mode": body.mode })))
 }
 
-pub async fn ws_logs(
-    State(state): State<WebAppState>,
-    ws: WebSocketUpgrade,
-) -> impl IntoResponse {
+pub async fn ws_logs(State(state): State<WebAppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
     let logbuf = state.inner.logbuf.clone();
     ws.on_upgrade(move |mut ws: WebSocket| async move {
         let mut interval = tokio::time::interval(Duration::from_secs(1));

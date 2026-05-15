@@ -48,8 +48,9 @@ async fn main() {
         .parse()
         .expect("BACNET_VENDOR_ID must be a u16");
     let bind_ip = resolve_ip(&env::var("BACNET_DEVICE_BIND").unwrap_or_else(|_| "0.0.0.0".into()));
-    let broadcast_ip =
-        resolve_ip(&env::var("BACNET_DEVICE_BROADCAST").unwrap_or_else(|_| "255.255.255.255".into()));
+    let broadcast_ip = resolve_ip(
+        &env::var("BACNET_DEVICE_BROADCAST").unwrap_or_else(|_| "255.255.255.255".into()),
+    );
 
     let mut transport = BipTransport::new(bind_ip, port, broadcast_ip);
     let mut rx: tokio::sync::mpsc::Receiver<ReceivedNpdu> = transport
@@ -168,9 +169,7 @@ async fn send_rp_response(
     let mut rp_apdu = Vec::with_capacity(64);
     rp_apdu.extend_from_slice(&[0x30, invoke_id]);
     rp_apdu.push(0x0C);
-    for _ in 0..start_bytes {
-        rp_apdu.push(0x00);
-    }
+    rp_apdu.extend(std::iter::repeat_n(0x00, start_bytes));
     rp_apdu.extend_from_slice(&id_bytes);
 
     match prop_id {
