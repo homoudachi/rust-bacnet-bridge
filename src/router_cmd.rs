@@ -182,7 +182,32 @@ pub async fn run_router(
                         }
                     }
                     web::RouterCommand::Start => {
-                        tracing::warn!("Router restart via command not yet supported");
+                        if state.current() != AppState::Stopped {
+                            tracing::warn!(
+                                "Cannot start router: current state is {:?}",
+                                state.current()
+                            );
+                            continue;
+                        }
+                        tracing::info!("Starting router via command");
+                        if state.try_transition(AppState::Starting).is_err() {
+                            tracing::error!("State transition to Starting failed");
+                            continue;
+                        }
+                        let cfg_guard = config.read().await;
+                        match start_router(&cfg_guard).await {
+                            Ok(r) => {
+                                drop(cfg_guard);
+                                running = Some(r);
+                                state.try_transition(AppState::Running).ok();
+                                tracing::info!("Router started via command");
+                            }
+                            Err(e) => {
+                                drop(cfg_guard);
+                                state.try_transition(AppState::Stopped).ok();
+                                tracing::error!("Failed to start router via command: {e}");
+                            }
+                        }
                     }
                     web::RouterCommand::SwitchTransport(mode) => {
                         if mode != "sc" && mode != "tailscale" {
