@@ -1,0 +1,13 @@
+ARG MCP_COMMIT=7267a123e1bde48e144a8034e46e47100d7869ff
+
+FROM rust:1.85-alpine AS builder
+RUN apk add --no-cache musl-dev git
+WORKDIR /mcp
+RUN git clone https://github.com/jscott3201/rusty-bacnet-mcp.git . \
+    && git checkout ${MCP_COMMIT}
+RUN cargo build --release --features bin
+
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /mcp/target/release/bacnet-mcp /usr/local/bin/
+ENTRYPOINT ["bacnet-mcp"]
