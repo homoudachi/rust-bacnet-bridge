@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,6 +22,8 @@ pub async fn run_router(
     let path = config_path
         .map(PathBuf::from)
         .unwrap_or_else(BridgeConfig::default_config_path);
+
+    let config_path_str = path.to_string_lossy().to_string();
 
     let mut config = BridgeConfig::load(&path)?;
 
@@ -50,7 +53,7 @@ pub async fn run_router(
             cfg.hub.clone()
         };
 
-        let tls_config = hub_cmd::build_self_signed_tls()
+        let tls_config = hub_cmd::build_self_signed_tls(&[])
             .map_err(|e| format!("Failed to build self-signed TLS for embedded hub: {e}"))?;
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
         let hub_bind = hub_config.bind.clone();
@@ -122,13 +125,25 @@ pub async fn run_router(
         state_rx,
         config.clone(),
         Some(path),
-        Some(cmd_tx),
+        Some(cmd_tx.clone()),
         fdt.clone(),
         logbuf.clone(),
         is_embedded_hub,
         cloud_hub_url,
         hub_listen_addr,
     );
+
+    #[cfg(feature = "windows-tray")]
+    let (tray_shutdown_tx, tray_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    #[cfg(feature = "windows-tray")]
+    {
+        let tray_state_rx = state.subscribe();
+        let tray_cmd_tx = cmd_tx.clone();
+        let tray_url = format!("http://{}:{}", web_host, web_port);
+        std::thread::spawn(move || {
+            crate::tray::run_tray(tray_state_rx, tray_cmd_tx, tray_url, tray_shutdown_rx);
+        });
+    }
 
     let ticker_fdt = fdt.clone();
     tokio::spawn(async move {
@@ -155,19 +170,40 @@ pub async fn run_router(
                 match cmd {
                     web::RouterCommand::Stop => {
                         if state.current() == AppState::Running {
-                            tracing::info!("Stopping router via web API");
+                            tracing::info!("Stopping router via command");
                             state.try_transition(AppState::Stopping)?;
                             if let Some(r) = running.take() {
                                 r.stop().await;
                             }
                             state.try_transition(AppState::Stopped)?;
-                            tracing::info!("Router stopped via web API");
+                            tracing::info!("Router stopped via command");
                         }
                     }
                     web::RouterCommand::Start => {
-                        tracing::warn!("Router restart via web API not yet supported");
+                        tracing::warn!("Router restart via command not yet supported");
                     }
-
+                    web::RouterCommand::SwitchTransport(mode) => {
+                        if mode != "sc" && mode != "tailscale" {
+                            tracing::warn!("Invalid transport mode: {}", mode);
+                            continue;
+                        }
+                        tracing::info!("Transport switch requested: {}", mode);
+                        let mut cfg = config.write().await;
+                        cfg.router.transport = mode;
+                        cfg.save(Path::new(&config_path_str)).ok();
+                        tracing::info!("Transport config saved. Restart router to apply.");
+                    }
+                    web::RouterCommand::Exit => {
+                        tracing::info!("Exit requested from tray");
+                        state.try_transition(AppState::Stopping)?;
+                        if let Some(r) = running.take() {
+                            r.stop().await;
+                        }
+                        state.try_transition(AppState::Stopped)?;
+                        #[cfg(feature = "windows-tray")]
+                        drop(tray_shutdown_tx);
+                        break;
+                    }
                 }
             }
         }

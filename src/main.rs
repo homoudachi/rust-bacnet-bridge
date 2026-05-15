@@ -1,3 +1,6 @@
+#[cfg(feature = "windows-tray")]
+mod tray;
+
 mod cli;
 mod hub_cmd;
 mod router_cmd;

@@ -7,17 +7,30 @@ edition.workspace = true
 name = "bacnet-bridge"
 path = "main.rs"
 
+[[example]]
+name = "lan_device_sim"
+path = "../examples/lan_device_sim.rs"
+required-features = ["router"]
+
+[[example]]
+name = "icomm_sim"
+path = "../examples/icomm_sim.rs"
+required-features = ["router"]
+
 [features]
 default = ["hub", "router", "serve"]
 hub = ["bacnet-transport/sc-tls"]
 router = []
 serve = []
-windows-tray = []
+windows-tray = ["dep:tray-item", "dep:winres", "dep:windows-sys"]
 acme = ["tokio-rustls-acme"]
 
 [dependencies]
 bridge-core = { path = "../crates/bridge-core" }
-bacnet-transport = { version = "0.9", default-features = false }
+bacnet-transport = { version = "0.9", default-features = false, features = ["sc-tls"] }
+bacnet-encoding = "0.9"
+bacnet-types = "0.9"
+bytes = "1"
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
@@ -33,4 +46,8 @@ rcgen = { version = "0.14", default-features = false, features = ["pem", "aws_lc
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 tokio-rustls = "0.26"
 rustls-pemfile = "2"
+tray-item = { version = "0.10", optional = true }
+winres = { version = "0.1", optional = true }
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"], optional = true }
+webbrowser = "1"
 tokio-rustls-acme = { version = "0.9", optional = true }

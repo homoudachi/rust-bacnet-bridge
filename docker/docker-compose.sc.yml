@@ -1,0 +1,112 @@
+# BACnet/SC topology (FSD §11.3.1)
+#
+# Topology:
+#   icomm-sim ──BIP── laptop-router ──SC── sc-hub ──SC── site-router ──BIP── lan-device-1
+#
+# Note: uses a /24 Docker bridge subnet so directed BIP broadcasts
+# reach all containers on the same port. Each container has a static IP.
+# TLS certs are self-signed with the container hostname as SAN
+# (HOSTNAME env var is injected by Docker).
+
+version: "3.8"
+
+services:
+  sc-hub:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.hub
+    ports:
+      - "8443:8443"
+    environment:
+      - BACNET_BRIDGE_HUB__BIND=0.0.0.0:8443
+      - RUST_LOG=info
+    networks:
+      bacnet-net:
+        ipv4_address: 172.20.0.2
+
+  site-router:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.router
+    depends_on:
+      sc-hub:
+        condition: service_started
+      lan-device-1:
+        condition: service_started
+    environment:
+      - BACNET_BRIDGE_ROUTER__TRANSPORT=sc
+      - BACNET_BRIDGE_ROUTER__SC__HUB_URL=wss://sc-hub:8443
+      - BACNET_BRIDGE_ROUTER__LAN__INTERFACE=172.20.0.3
+      - BACNET_BRIDGE_ROUTER__LAN__PORT=47808
+      - BACNET_BRIDGE_ROUTER__DEVICE_ID=100
+      - RUST_LOG=info
+    command: ["router"]
+    networks:
+      bacnet-net:
+        ipv4_address: 172.20.0.3
+
+  laptop-router:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.router
+    depends_on:
+      sc-hub:
+        condition: service_started
+    environment:
+      - BACNET_BRIDGE_ROUTER__TRANSPORT=sc
+      - BACNET_BRIDGE_ROUTER__SC__HUB_URL=wss://sc-hub:8443
+      - BACNET_BRIDGE_ROUTER__LAN__INTERFACE=172.20.0.4
+      - BACNET_BRIDGE_ROUTER__LAN__PORT=47809
+      - BACNET_BRIDGE_ROUTER__DEVICE_ID=200
+      - RUST_LOG=info
+    command: ["router"]
+    networks:
+      bacnet-net:
+        ipv4_address: 172.20.0.4
+
+  lan-device-1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.simulator
+    environment:
+      - BACNET_DEVICE_ID=1001
+      - BACNET_DEVICE_NAME=Test-Device-01
+      - BACNET_DEVICE_PORT=47808
+      - BACNET_DEVICE_BIND=172.20.0.5
+      - BACNET_DEVICE_BROADCAST=172.20.0.255
+      - RUST_LOG=info
+    command: ["lan_device_sim"]
+    networks:
+      bacnet-net:
+        ipv4_address: 172.20.0.5
+
+  icomm-simulator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.simulator
+    depends_on:
+      laptop-router:
+        condition: service_started
+      lan-device-1:
+        condition: service_started
+    environment:
+      - BACNET_DEVICE_PORT=47809
+      - BACNET_DEVICE_BIND=172.20.0.6
+      - BACNET_DEVICE_BROADCAST=172.20.0.255
+      - BACNET_TEST_TARGET=unicast
+      - BACNET_TEST_TARGET_IP=172.20.0.4
+      - BACNET_TEST_TARGET_PORT=47809
+      - BACNET_TEST_TIMEOUT=30
+      - RUST_LOG=info
+    command: ["icomm_sim"]
+    networks:
+      bacnet-net:
+        ipv4_address: 172.20.0.6
+
+networks:
+  bacnet-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+          gateway: 172.20.0.1

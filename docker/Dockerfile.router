@@ -1,0 +1,13 @@
+FROM rust:1.85-alpine AS builder
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY src/ src/
+COPY examples/ examples/
+RUN cargo build --release --no-default-features --features router,hub
+
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /app/target/release/bacnet-bridge /usr/local/bin/
+ENTRYPOINT ["bacnet-bridge"]
