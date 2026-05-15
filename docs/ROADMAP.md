@@ -2,7 +2,7 @@
 
 ## Status
 
-**Phase:** Phase 6 (polish) — ~99% complete. All five implementation phases built; all polish items completed; all "Next steps" items completed 2026-05-15.
+**Phase:** Phase 6 (polish) — ~99% complete. All five implementation phases built; all polish items completed; FSD alignment audit complete 2026-05-16.
 
 ## Key design decisions (from grilling session)
 
@@ -84,6 +84,34 @@
 - [x] Dependabot config verified and corrected (#33)
 - [x] Production Let's Encrypt ACME — config flag + CLI (#30)
 
+## Phase 6 FSD alignment work (2026-05-16)
+
+- [x] State gating: `transport_stop` and `transport_switch` return 409 Conflict per FSD 8.5 (#38, #39)
+- [x] CLI params: `--log-level` on `router`, `--port`/`--host` on `serve` (#40)
+- [x] State machine unit tests: 6 tests for valid/invalid transitions (#41)
+- [x] Transport unit tests: 4 tests for SC/BBMD dispatch and error handling (#41)
+- [x] Dashboard API integration tests: 25 tests covering all REST endpoints (#44)
+- [x] WebSocket `fields` key on log messages per FSD 7.4 (#45)
+- [x] Local BACnet device: active transport mode property per FSD 5.2 (#47)
+- [x] Router Info dashboard section with connected networks table per FSD 7.2.5 (#46)
+- [x] System interface detection via `get_if_addrs` per FSD 7.2.2 (#42)
+- [x] FDT manager wired to real BbmdState for runtime population (#49)
+- [x] Docker BTL healthcheck port fix (8080 → 28821) (#43)
+- [x] favicon.ico asset created
+
 ## Next steps (future)
-- BTL harness: switch from staging to production ACME for real Let's Encrypt certs (flag exists, just toggle)
-- Docker E2E + BTL CI job reliability hardening (pre-existing failures on master)
+
+### Docker E2E testing plan
+
+The `docker/docker-compose.sc.yml` and `docker-compose.bbmd.yml` files exist and define full BACnet topology tests. They build Rust from source in multi-stage Docker builds (4-5 images). First build ~30-60 min; incremental builds fast after layer caching.
+
+For a future phase:
+1. Run `docker compose -f docker/docker-compose.sc.yml build` to bootstrap images
+2. Run `docker compose -f docker/docker-compose.sc.yml up --abort-on-container-exit` for SC topology test
+3. Repeat for BBMD topology (`docker-compose.bbmd.yml`)
+4. Wire into CI if reliable (currently known pre-existing failures on master to harden)
+5. Add a `docker-compose.test.yml` with a test-runner service that validates Who-Is/I-Am/ReadProperty round-trips
+
+### BTL ACME production mode
+
+The `--acme-production` flag on the `hub` subcommand toggles between Let's Encrypt staging and production. Staging is safe for CI/BTL testing; production requires a real public domain. No code changes needed — just set the flag when deploying a production Hub.
