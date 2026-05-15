@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use bridge_core::BridgeError;
 use bridge_core::HubConfig;
-use rand::Rng;
 use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::ServerConfig;
@@ -16,7 +15,7 @@ use bacnet_transport::sc_frame::Vmac;
 use bacnet_transport::sc_hub::ScHub;
 
 pub async fn run_hub(config: &HubConfig) -> Result<(), BridgeError> {
-    let hub_vmac: Vmac = rand::thread_rng().gen();
+    let hub_vmac: Vmac = rand::random();
     let tls_config = build_tls_config(config).await?;
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
     let bind_addr = config.bind.clone();
