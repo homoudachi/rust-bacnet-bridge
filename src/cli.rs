@@ -28,6 +28,8 @@ pub enum Command {
         acme_domain: Option<String>,
         #[arg(long, default_value = "./acme-cache")]
         acme_cache: String,
+        #[arg(long)]
+        acme_production: bool,
     },
     Serve {
         #[arg(long)]
