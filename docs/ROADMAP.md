@@ -2,7 +2,7 @@
 
 ## Status
 
-**Phase:** Pre-implementation. Spike validated: `BACnetRouter` with two loopback ports correctly forwards global broadcasts (Who-Is, I-Am) and unicast (ReadProperty) with proper SNET/SADR and DNET/DADR handling. See `examples/spike-two-port-router/`.
+**Phase:** Phase 6 (polish) — ~95% complete. All five implementation phases built; nine remaining polish items from Phase 6 completed in this session.
 
 ## Key design decisions (from grilling session)
 
@@ -68,6 +68,19 @@
 32. BTL harness integration as separate CI job (~253 router-relevant tests: BVLC/BBMD §9.3, SC §9.9, routing §10)
 33. Release build: `cargo build --release --features windows-tray`
 
-## Next session start point
+## All Phase 6 items completed
 
-Run `examples/spike-two-port-router/` to re-verify router integration works, then begin Phase 1: create the Cargo workspace and `bridge-core` crate. Pin rusty-bacnet deps to latest crates.io version at start of each session.
+- [x] ACME TLS support (tokio-rustls-acme with DirCache, staging)
+- [x] Dependabot configuration (weekly Cargo + GitHub Actions)
+- [x] Release build CI artifact (bacnet-bridge.exe upload)
+- [x] BTL harness CI (health checks, improved compose)
+- [x] Router Start command (state-gated stop-build-start)
+- [x] Full transport switch cycle (stop-build-start)
+- [x] rcgen version unified (0.14 across workspace)
+- [x] AGENTS.md updated (~95% implementation state)
+
+## Next steps (future)
+
+- Production Let's Encrypt ACME (switch from staging to production)
+- BTL harness commit pinning for reproducible builds
+- Full end-to-end integration tests for the transport switch cycle
