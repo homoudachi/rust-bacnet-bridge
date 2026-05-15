@@ -48,7 +48,7 @@ tokio-rustls = "0.26"
 rustls-pemfile = "2"
 tray-item = { version = "0.10", optional = true }
 winres = { version = "0.1", optional = true }
-windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"], optional = true }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"], optional = true }
 webbrowser = "1"
 tokio-rustls-acme = { version = "0.9", optional = true }
 futures = { version = "0.3", optional = true }
