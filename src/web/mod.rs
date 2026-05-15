@@ -20,6 +20,10 @@ pub struct WebAppStateInner {
     pub command_tx: Option<mpsc::Sender<RouterCommand>>,
     pub fdt: Arc<tokio::sync::Mutex<FdtManager>>,
     pub logbuf: Arc<LogRingBuffer>,
+    pub is_embedded_hub: tokio::sync::Mutex<bool>,
+    pub cloud_hub_url: tokio::sync::Mutex<Option<String>>,
+    pub hub_listen_addr: Option<String>,
+    pub hub_spoke_count: tokio::sync::Mutex<u32>,
 }
 
 #[derive(Clone)]
@@ -43,6 +47,9 @@ pub fn run_web_server(
     command_tx: Option<mpsc::Sender<RouterCommand>>,
     fdt: Arc<tokio::sync::Mutex<FdtManager>>,
     logbuf: Arc<LogRingBuffer>,
+    is_embedded_hub: bool,
+    cloud_hub_url: Option<String>,
+    hub_listen_addr: Option<String>,
 ) -> JoinHandle<()> {
     let shared = WebAppState {
         inner: Arc::new(WebAppStateInner {
@@ -53,6 +60,10 @@ pub fn run_web_server(
             command_tx,
             fdt,
             logbuf,
+            is_embedded_hub: tokio::sync::Mutex::new(is_embedded_hub),
+            cloud_hub_url: tokio::sync::Mutex::new(cloud_hub_url),
+            hub_listen_addr,
+            hub_spoke_count: tokio::sync::Mutex::new(0),
         }),
     };
 
@@ -66,6 +77,8 @@ pub fn run_web_server(
         .route("/api/transport/switch", axum::routing::post(api::transport_switch))
         .route("/api/transport/stop", axum::routing::post(api::transport_stop))
         .route("/api/transport/start", axum::routing::post(api::transport_start))
+        .route("/api/hub/status", axum::routing::get(api::hub_status))
+        .route("/api/hub/mode", axum::routing::post(api::hub_mode_switch))
         .route("/api/fdt", axum::routing::get(api::get_fdt))
         .route("/api/logs", axum::routing::get(api::get_logs))
         .route("/ws/logs", axum::routing::get(api::ws_logs));

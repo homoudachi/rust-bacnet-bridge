@@ -53,6 +53,9 @@ pub async fn run_serve(
         Some(_cmd_tx),
         fdt,
         logbuf,
+        false,
+        None,
+        None,
     );
 
     tokio::signal::ctrl_c().await?;

@@ -141,7 +141,41 @@
             </div>
         </div>
 
-        <div id="config-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div id="hub-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Hub Mode</h2>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Current:</span>
+                        <span class="text-sm font-mono font-medium" id="hub-mode-current">--</span>
+                    </div>
+                    <div class="flex items-center justify-between" id="hub-addr-row" style="display:none">
+                        <span class="text-sm text-gray-600">Listen Address:</span>
+                        <span class="text-sm font-mono text-gray-700" id="hub-listen-addr">--</span>
+                    </div>
+                    <div class="flex items-center justify-between" id="hub-spoke-row" style="display:none">
+                        <span class="text-sm text-gray-600">Connected Spokes:</span>
+                        <span class="text-sm font-mono text-gray-700" id="hub-spoke-count">0</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-hub-cloud"
+                                class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                       border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100
+                                       disabled:opacity-50 disabled:cursor-not-allowed"
+                                onclick="switchHubMode('cloud')">
+                            Use Cloud Hub
+                        </button>
+                        <button id="btn-hub-embedded"
+                                class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                       border-green-200 text-green-700 bg-green-50 hover:bg-green-100
+                                       disabled:opacity-50 disabled:cursor-not-allowed"
+                                onclick="switchHubMode('embedded')">
+                            Use Embedded Hub
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="config-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-lg font-semibold text-gray-800">Configuration</h2>
                 <button id="btn-save-config"
