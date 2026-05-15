@@ -2,7 +2,7 @@
 
 ## Status
 
-**Phase:** Phase 6 (polish) — ~95% complete. All five implementation phases built; nine remaining polish items from Phase 6 completed in this session.
+**Phase:** Phase 6 (polish) — ~95% complete. All five implementation phases built; nine polish items completed. Dependabot PRs merged 2026-05-15: `toml` 0.8→1.1, `dirs` 5→6, `windows-sys` 0.52→0.61, `rand` 0.8→0.10, `actions/checkout` 4→6, `actions/upload-artifact` 4→7.
 
 ## Key design decisions (from grilling session)
 
