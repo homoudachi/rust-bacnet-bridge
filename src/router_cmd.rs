@@ -6,7 +6,6 @@ use std::time::Duration;
 use bacnet_transport::sc_frame::Vmac;
 use bacnet_transport::sc_hub::ScHub;
 use bridge_core::{start_router, AppState, BridgeConfig, FdtManager, LogRingBuffer, StateManager};
-use rand::Rng;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
 
@@ -57,7 +56,7 @@ pub async fn run_router(
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
         let hub_bind = hub_config.bind.clone();
 
-        let hub_vmac: Vmac = rand::thread_rng().gen();
+        let hub_vmac: Vmac = rand::random();
 
         tracing::info!("Starting embedded Hub on {}", hub_bind);
 
