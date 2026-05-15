@@ -71,6 +71,7 @@ async fn test_router_connects_as_sc_spoke() {
                 client_cert: None,
                 client_key: None,
                 ca_cert: Some(cert_path.to_string_lossy().to_string()),
+                danger_accept_invalid_certs: false,
             },
             tailscale: TailscaleConfig::default(),
         },

@@ -112,6 +112,7 @@ pub struct ScConfig {
     pub client_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ca_cert: Option<String>,
+    #[serde(skip_serializing_if = "is_false")]
     pub danger_accept_invalid_certs: bool,
 }
 
@@ -128,6 +129,10 @@ impl Default for ScConfig {
             danger_accept_invalid_certs: false,
         }
     }
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
