@@ -120,24 +120,19 @@ pub async fn transport_switch(
         val
     };
 
-    if current_state != AppState::Stopped {
-        return Err((
+    // Running: do full stop-build-start cycle. Stopped: just save config.
+    if current_state == AppState::Running || current_state == AppState::Stopped {
+        let tx = state.inner.command_tx.as_ref().unwrap();
+        let _ = tx.send(RouterCommand::SwitchTransport(body.mode.clone())).await;
+        Ok(Json(json!({ "status": "ok", "transport": body.mode })))
+    } else {
+        Err((
             StatusCode::CONFLICT,
             Json(json!({
-                "error": "Cannot switch transport while router is running. Stop the router first."
+                "error": "Cannot switch transport. Router must be Running or Stopped."
             })),
-        ));
+        ))
     }
-
-    {
-        let mut cfg = state.inner.config.write().await;
-        cfg.router.transport = body.mode.clone();
-        if let Some(path) = &state.inner.config_path {
-            let _ = cfg.save(std::path::Path::new(path));
-        }
-    }
-
-    Ok(Json(json!({ "status": "ok", "transport": body.mode })))
 }
 
 pub async fn transport_stop(
