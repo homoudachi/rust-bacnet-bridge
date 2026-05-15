@@ -45,6 +45,24 @@ services:
       bacnet-net:
         ipv4_address: 172.20.0.3
 
+  bacnet-mcp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mcp
+    depends_on:
+      site-router:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./docker/config/mcp.json:/config/mcp.json:ro
+    environment:
+      - RUST_LOG=info
+    command: ["--config", "/config/mcp.json", "--transport", "http", "--bind", "0.0.0.0:3000"]
+    networks:
+      bacnet-net:
+        ipv4_address: 172.20.0.10
+
   laptop-router:
     build:
       context: ..
