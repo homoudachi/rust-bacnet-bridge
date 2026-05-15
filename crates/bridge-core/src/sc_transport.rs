@@ -6,9 +6,7 @@ use bacnet_transport::sc::ScTransport;
 use bacnet_transport::sc_frame::Vmac;
 use bacnet_transport::sc_tls::TlsWebSocket;
 use rand::RngExt;
-use rustls::client::danger::{
-    HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
-};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
 use rustls::DigitallySignedStruct;
 use tokio_rustls::rustls;
@@ -67,10 +65,11 @@ pub fn build_client_tls_config(
     danger_accept_invalid_certs: bool,
 ) -> Result<Arc<rustls::ClientConfig>, BridgeError> {
     if danger_accept_invalid_certs {
-        let config = rustls::ClientConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(NoServerVerification))
-            .with_no_client_auth();
+        let config =
+            rustls::ClientConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoServerVerification))
+                .with_no_client_auth();
         tracing::warn!("DANGER: TLS certificate verification is DISABLED for SC transport");
         return Ok(Arc::new(config));
     }

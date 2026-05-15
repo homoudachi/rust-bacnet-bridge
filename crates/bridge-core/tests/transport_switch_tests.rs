@@ -124,7 +124,9 @@ async fn test_remote_transport_rejects_invalid_mode() {
         ..BridgeConfig::default()
     };
 
-    let result = bridge_core::build_remote_transport(&config).await.map(|(t, _)| t);
+    let result = bridge_core::build_remote_transport(&config)
+        .await
+        .map(|(t, _)| t);
     match result {
         Err(e) => {
             let msg = e.to_string();
@@ -148,7 +150,9 @@ async fn test_remote_transport_sc_dispatch() {
         ..BridgeConfig::default()
     };
 
-    let result = bridge_core::build_remote_transport(&config).await.map(|(t, _)| t);
+    let result = bridge_core::build_remote_transport(&config)
+        .await
+        .map(|(t, _)| t);
     if let Err(e) = result {
         let msg = e.to_string();
         assert!(

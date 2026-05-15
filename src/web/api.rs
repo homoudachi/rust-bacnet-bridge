@@ -162,7 +162,9 @@ pub async fn interfaces(State(state): State<WebAppState>) -> impl IntoResponse {
         }));
     }
 
-    if !cfg.router.tailscale.interface.is_empty() && !seen_ips.contains(&cfg.router.tailscale.interface) {
+    if !cfg.router.tailscale.interface.is_empty()
+        && !seen_ips.contains(&cfg.router.tailscale.interface)
+    {
         let ip = &cfg.router.tailscale.interface;
         interfaces.push(json!({
             "name": "tailscale",

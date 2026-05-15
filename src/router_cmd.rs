@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bacnet_transport::bbmd::BbmdState;
 use bacnet_transport::sc_frame::Vmac;
 use bacnet_transport::sc_hub::ScHub;
-use bacnet_transport::bbmd::BbmdState;
 use bridge_core::{start_router, AppState, BridgeConfig, FdtManager, LogRingBuffer, StateManager};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
@@ -111,8 +111,9 @@ pub async fn run_router(
     let fdt = Arc::new(Mutex::new(FdtManager::new()));
     let logbuf = Arc::new(LogRingBuffer::new(1000));
 
-    let bbmd_handle: Arc<RwLock<Option<Arc<Mutex<BbmdState>>>>> =
-        Arc::new(RwLock::new(running.as_ref().and_then(|r| r.bbmd_state.clone())));
+    let bbmd_handle: Arc<RwLock<Option<Arc<Mutex<BbmdState>>>>> = Arc::new(RwLock::new(
+        running.as_ref().and_then(|r| r.bbmd_state.clone()),
+    ));
 
     {
         let sync_fdt = fdt.clone();
