@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
-use bridge_core::{start_router, AppState, BridgeConfig, StateManager};
-use tokio::sync::{mpsc, RwLock};
+use bridge_core::{start_router, AppState, BridgeConfig, FdtManager, LogRingBuffer, StateManager};
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing;
 
 use crate::web;
@@ -52,6 +53,9 @@ pub async fn run_router(
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<web::RouterCommand>(32);
     let state_rx = state.subscribe();
 
+    let fdt = Arc::new(Mutex::new(FdtManager::new()));
+    let logbuf = Arc::new(LogRingBuffer::new(1000));
+
     let web_host = {
         let cfg = config.read().await;
         cfg.web.host.clone()
@@ -69,7 +73,18 @@ pub async fn run_router(
         config.clone(),
         Some(path),
         Some(cmd_tx),
+        fdt.clone(),
+        logbuf.clone(),
     );
+
+    let ticker_fdt = fdt.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(2));
+        loop {
+            interval.tick().await;
+            ticker_fdt.lock().await.tick();
+        }
+    });
 
     loop {
         tokio::select! {

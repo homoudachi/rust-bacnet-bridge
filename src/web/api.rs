@@ -1,5 +1,8 @@
+use std::time::Duration;
+
 use axum::{
-    extract::State,
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -7,7 +10,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use bridge_core::{AppState, BridgeConfig};
+use bridge_core::{AppState, BridgeConfig, FdtDisplayEntry};
 
 use crate::web::{RouterCommand, WebAppState};
 
@@ -177,4 +180,58 @@ pub async fn update_config(
     }
 
     (StatusCode::OK, Json(json!({ "status": "ok" })))
+}
+
+pub async fn get_fdt(State(state): State<WebAppState>) -> impl IntoResponse {
+    let transport = {
+        let cfg = state.inner.config.read().await;
+        cfg.router.transport.clone()
+    };
+    if transport != "tailscale" {
+        return Json(Vec::<FdtDisplayEntry>::new());
+    }
+    let entries = state.inner.fdt.lock().await.list();
+    Json(entries)
+}
+
+#[derive(Deserialize)]
+pub struct LogQuery {
+    pub limit: Option<usize>,
+    pub level: Option<String>,
+}
+
+pub async fn get_logs(
+    State(state): State<WebAppState>,
+    Query(params): Query<LogQuery>,
+) -> impl IntoResponse {
+    let limit = params.limit.unwrap_or(500);
+    let level = params.level.as_deref();
+    let entries = state.inner.logbuf.recent(limit, level);
+    Json(entries)
+}
+
+pub async fn ws_logs(
+    State(state): State<WebAppState>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    let logbuf = state.inner.logbuf.clone();
+    ws.on_upgrade(move |mut ws: WebSocket| async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    let entries = logbuf.recent(50, None);
+                    if let Ok(text) = serde_json::to_string(&entries) {
+                        if ws.send(Message::Text(text.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+                msg = ws.recv() => {
+                    let _ = msg;
+                    break;
+                }
+            }
+        }
+    })
 }

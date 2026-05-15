@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, watch, Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tower_http::services::ServeDir;
 
-use bridge_core::{AppState, BridgeConfig};
+use bridge_core::{AppState, BridgeConfig, FdtManager, LogRingBuffer};
 
 pub struct WebAppStateInner {
     pub state_rx: Mutex<watch::Receiver<AppState>>,
@@ -18,6 +18,8 @@ pub struct WebAppStateInner {
     pub config_path: Option<String>,
     pub start_time: Mutex<Option<Instant>>,
     pub command_tx: Option<mpsc::Sender<RouterCommand>>,
+    pub fdt: Arc<tokio::sync::Mutex<FdtManager>>,
+    pub logbuf: Arc<LogRingBuffer>,
 }
 
 #[derive(Clone)]
@@ -39,6 +41,8 @@ pub fn run_web_server(
     config: Arc<RwLock<BridgeConfig>>,
     config_path: Option<PathBuf>,
     command_tx: Option<mpsc::Sender<RouterCommand>>,
+    fdt: Arc<tokio::sync::Mutex<FdtManager>>,
+    logbuf: Arc<LogRingBuffer>,
 ) -> JoinHandle<()> {
     let shared = WebAppState {
         inner: Arc::new(WebAppStateInner {
@@ -47,6 +51,8 @@ pub fn run_web_server(
             config_path: config_path.map(|p| p.to_string_lossy().to_string()),
             start_time: Mutex::new(Some(Instant::now())),
             command_tx,
+            fdt,
+            logbuf,
         }),
     };
 
@@ -59,7 +65,10 @@ pub fn run_web_server(
         )
         .route("/api/transport/switch", axum::routing::post(api::transport_switch))
         .route("/api/transport/stop", axum::routing::post(api::transport_stop))
-        .route("/api/transport/start", axum::routing::post(api::transport_start));
+        .route("/api/transport/start", axum::routing::post(api::transport_start))
+        .route("/api/fdt", axum::routing::get(api::get_fdt))
+        .route("/api/logs", axum::routing::get(api::get_logs))
+        .route("/ws/logs", axum::routing::get(api::ws_logs));
 
     let app = if dev {
         let assets_path = format!("{}/assets", env!("CARGO_MANIFEST_DIR"));

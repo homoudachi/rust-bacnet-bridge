@@ -341,9 +341,139 @@ async function startRouter() {
     }
 }
 
+function formatFdtTable(entries) {
+    const tbody = document.getElementById('fdt-tbody');
+    if (!entries || entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="py-4 text-gray-400">No foreign devices registered</td></tr>';
+        return;
+    }
+    tbody.innerHTML = entries.map(e => `
+        <tr class="border-b border-gray-100 hover:bg-gray-50">
+            <td class="py-2 font-mono">${e.ip}:${e.port}</td>
+            <td class="py-2">${e.ttl}</td>
+            <td class="py-2 ${e.remaining_ttl > 0 ? '' : 'text-red-500 font-medium'}">${e.remaining_ttl > 0 ? e.remaining_ttl : 'expired'}</td>
+        </tr>
+    `).join('');
+}
+
+let logEntries = [];
+let wsConnected = false;
+
+function setupWebSocket() {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${location.host}/ws/logs`;
+    let ws = new WebSocket(wsUrl);
+    wsConnected = false;
+
+    ws.onopen = () => {
+        wsConnected = true;
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const entries = JSON.parse(event.data);
+            entries.forEach(e => {
+                logEntries.push(e);
+                if (logEntries.length > 500) {
+                    logEntries = logEntries.slice(-500);
+                }
+            });
+            renderLogs();
+        } catch (e) {
+            // ignore parse errors
+        }
+    };
+
+    ws.onclose = () => {
+        wsConnected = false;
+        setTimeout(setupWebSocket, 3000);
+    };
+
+    ws.onerror = () => {
+        ws.close();
+    };
+}
+
+function renderLogs() {
+    const viewer = document.getElementById('log-viewer');
+    const levelFilter = document.getElementById('log-level-filter').value;
+    const searchText = document.getElementById('log-search').value.toLowerCase();
+
+    const levelOrder = { 'TRACE': 0, 'DEBUG': 1, 'INFO': 2, 'WARN': 3, 'ERROR': 4 };
+    const minLevel = levelFilter ? (levelOrder[levelFilter] || 0) : 0;
+
+    const filtered = logEntries.filter(e => {
+        const lv = levelOrder[e.level] !== undefined ? levelOrder[e.level] : 0;
+        return lv >= minLevel && (!searchText || e.message.toLowerCase().includes(searchText) || e.target.toLowerCase().includes(searchText));
+    });
+
+    const last50 = filtered.slice(-50);
+
+    if (last50.length === 0) {
+        viewer.innerHTML = '<div class="text-gray-500">No log entries match filters</div>';
+        return;
+    }
+
+    viewer.innerHTML = last50.map(e => {
+        const colorClass = e.level === 'ERROR' ? 'text-red-400' :
+                           e.level === 'WARN' ? 'text-yellow-400' :
+                           e.level === 'INFO' ? 'text-gray-100' :
+                           'text-gray-400';
+        return `<div class="${colorClass}">[${e.timestamp}] [${e.level}] [${e.target}] ${e.message}</div>`;
+    }).join('');
+
+    viewer.scrollTop = viewer.scrollHeight;
+}
+
+function filterLogs() {
+    renderLogs();
+}
+
+async function downloadLogs() {
+    try {
+        const resp = await fetch('/api/logs');
+        if (!resp.ok) return;
+        const entries = await resp.json();
+        const text = entries.map(e => `[${e.timestamp}] [${e.level}] [${e.target}] ${e.message}`).join('\n');
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'bacnet-bridge-logs.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        // silent
+    }
+}
+
+async function updateFdt() {
+    try {
+        const resp = await fetch('/api/status');
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        const fdtCard = document.getElementById('fdt-card');
+        if (data.transport === 'tailscale') {
+            fdtCard.style.display = 'block';
+            const fdtResp = await fetch('/api/fdt');
+            if (fdtResp.ok) {
+                const entries = await fdtResp.json();
+                formatFdtTable(entries);
+            }
+        } else {
+            fdtCard.style.display = 'none';
+        }
+    } catch (e) {
+        // silent
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     updateStatus();
     loadInterfaces();
     loadConfig();
+    setupWebSocket();
     setInterval(updateStatus, 5000);
+    setInterval(updateFdt, 2000);
 });

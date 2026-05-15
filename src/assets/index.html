@@ -102,6 +102,45 @@
             </div>
         </div>
 
+        <div id="fdt-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6" style="display:none">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Foreign Device Table</h2>
+            <div id="fdt-table-container">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-500 border-b">
+                            <th class="pb-2">Device Address</th>
+                            <th class="pb-2">TTL (s)</th>
+                            <th class="pb-2">Remaining (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fdt-tbody">
+                        <tr><td colspan="3" class="py-4 text-gray-400">No foreign devices registered</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="log-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-800">Live Log</h2>
+                <div class="flex items-center gap-2">
+                    <select id="log-level-filter" class="text-sm border rounded px-2 py-1" onchange="filterLogs()">
+                        <option value="">All</option>
+                        <option value="INFO">Info+</option>
+                        <option value="WARN">Warn+</option>
+                        <option value="ERROR">Error+</option>
+                    </select>
+                    <input id="log-search" type="text" placeholder="Search..."
+                           class="text-sm border rounded px-2 py-1 w-40" oninput="filterLogs()">
+                    <button onclick="downloadLogs()"
+                            class="text-sm px-3 py-1 border rounded hover:bg-gray-50">Download</button>
+                </div>
+            </div>
+            <div id="log-viewer" class="bg-gray-900 text-gray-100 rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs">
+                <div class="text-gray-500">Waiting for log entries...</div>
+            </div>
+        </div>
+
         <div id="config-card" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-lg font-semibold text-gray-800">Configuration</h2>
