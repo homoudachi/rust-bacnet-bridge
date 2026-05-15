@@ -27,7 +27,7 @@ async fn test_router_connects_as_sc_spoke() {
 
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let cert_pem = cert.cert.pem();
-    let key_pem = cert.key_pair.serialize_pem();
+    let key_pem = cert.signing_key.serialize_pem();
     std::fs::write(&cert_path, cert_pem.as_bytes()).unwrap();
     std::fs::write(&key_path, key_pem.as_bytes()).unwrap();
 
