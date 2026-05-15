@@ -2,7 +2,7 @@
 
 ## Status
 
-**Phase:** Phase 6 (polish) — ~95% complete. All five implementation phases built; nine polish items completed. Dependabot PRs merged 2026-05-15: `toml` 0.8→1.1, `dirs` 5→6, `windows-sys` 0.52→0.61, `rand` 0.8→0.10, `actions/checkout` 4→6, `actions/upload-artifact` 4→7.
+**Phase:** Phase 6 (polish) — ~98% complete. All five implementation phases built; all polish items completed; all "Next steps" items completed 2026-05-15.
 
 ## Key design decisions (from grilling session)
 
@@ -79,8 +79,11 @@
 - [x] rcgen version unified (0.14 across workspace)
 - [x] AGENTS.md updated (~95% implementation state)
 
-## Next steps (future)
+- [x] BTL harness commit pinning for reproducible builds (#31)
+- [x] Full end-to-end integration tests for the transport switch cycle (#32)
+- [x] Dependabot config verified and corrected (#33)
+- [x] Production Let's Encrypt ACME — config flag + CLI (#30)
 
-- Production Let's Encrypt ACME (switch from staging to production)
-- BTL harness commit pinning for reproducible builds
-- Full end-to-end integration tests for the transport switch cycle
+## Next steps (future)
+- BTL harness: switch from staging to production ACME for real Let's Encrypt certs (flag exists, just toggle)
+- Docker E2E + BTL CI job reliability hardening (pre-existing failures on master)
