@@ -99,7 +99,7 @@ pub fn run_web_server(cfg: WebServerConfig) -> JoinHandle<()> {
 
     let app = if cfg.dev {
         let assets_path = format!("{}/assets", env!("CARGO_MANIFEST_DIR"));
-        app.nest_service("/", ServeDir::new(&assets_path))
+        Router::new().fallback_service(ServeDir::new(&assets_path))
     } else {
         app.route("/", axum::routing::get(routes::index))
             .route("/style.css", axum::routing::get(routes::style_css))
