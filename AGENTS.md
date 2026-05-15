@@ -2,7 +2,31 @@
 
 ## Current state
 
-No Rust code exists yet. The repo is in pre-implementation: `docs/FSD.md` describes the planned Rust rewrite. The Python prototype has been removed.
+~85% complete. All five implementation phases are built; Phase 6 (polish) is in progress.
+
+**Built and working:**
+- Workspace: root `Cargo.toml` with `crates/bridge-core` + `src/` binary
+- Core routing: `BACnetRouter` with two ports (LAN BIP + SC or BBMD transport)
+- Config: TOML load/save, env-var overrides, auto-generation on first run
+- Transports: BACnet/SC spoke via `TlsWebSocket`, BBMD via `BipTransport::enable_bbmd()`
+- FDT: foreign device table management (Tailscale mode only)
+- State machine: `AppState` (Stopped/Starting/Running/Stopping) with `tokio::sync::watch`
+- CLI: `router`, `hub`, `serve` subcommands via clap
+- Embedded Hub mode: `--with-hub` runs SC Hub + Router simultaneously
+- Web dashboard: axum + HTMX + Tailwind CSS, embedded assets (rust-embed)
+- REST API: status, config, FDT, logs, transport switch, WebSocket log streaming
+- Windows system tray: green/amber/red DIB icons, right-click menu, state-gated items
+- Docker: compose topologies for SC, BBMD, and BTL harness
+- CI: GitHub Actions (fmt, clippy, test, docker e2e, BTL on push)
+- Tests: 38 tests (unit + integration) covering config, FDT, routing, SC, BBMD
+
+**Remaining (see `docs/ROADMAP.md` Phase 6):**
+- ACME TLS support for Hub mode (stubbed)
+- Dependabot configuration
+- Release build CI artifact
+- BTL harness CI integration
+- Router Start command (stubbed)
+- Full transport switch cycle (stop-build-start)
 
 ## Domain language
 
@@ -15,7 +39,7 @@ CONTEXT.md defines precise terminology. Use these terms, not casual synonyms:
 - **Site Router** = bridge at the facility. **Laptop Router** = bridge on service laptop alongside iComm.
 - Network numbers: LAN = network 1, SC spoke side = network 2.
 
-## Architecture (planned, not built)
+## Architecture
 
 - Single binary `bacnet-bridge` with subcommands: `router`, `hub`, `serve`
 - Crate split: `bridge-core` (routing engine) + binary in workspace `src/` (web UI, tray, CLI)
@@ -27,26 +51,14 @@ CONTEXT.md defines precise terminology. Use these terms, not casual synonyms:
 - Embedded Hub mode (`--with-hub`): Site Router runs SC Hub + Router simultaneously (no VPS needed)
 - Web dashboard: axum + HTMX + Tailwind CSS, served from embedded assets (pre-built CSS committed to repo)
 - System tray: Windows only, `tray-item` crate with green/amber/red `.ico` icons; three-state: green=connected, amber=reconnecting/fallback, red=disconnected
+- Config: TOML on disk + env-var overrides (prefix `BACNET_BRIDGE__`), auto-generated on first run
+- Testing: `cargo test` (unit + integration), Docker compose e2e, BTL harness for compliance
 
 ## Source of truth
 
-`docs/FSD.md` is the authoritative plan. ADRs in `docs/adr/` explain key decisions. The Python code in `bacnet_bbmd_tool_tailscale/` is a proof-of-concept with known defects (malformed packets visible in Wireshark, monkey-patched broadcast forwarding bypassing proper Clause 6 routing). Do not treat it as a specification.
+`docs/FSD.md` is the authoritative plan. ADRs in `docs/adr/` explain key decisions. `docs/ROADMAP.md` tracks implementation progress.
 
 ## Key constraints
-
-- BACnet/SC is the primary transport; Tailscale BBMD is a fallback for when the cloud Hub is unreachable
-- No automatic transport failover — prevents flapping during intermittent SC connectivity
-- Hub mode requires TLS (static certs, Let's Encrypt ACME, or self-signed for testing)
-- BTL compliance target: ~253 router-relevant tests from rusty-bacnet's harness (BVLC/BBMD §9.3, SC §9.9, NPDU routing §10.1–10.5)
-
-## When Rust toolchain arrives
-
-- Expected root `Cargo.toml` workspace, `crates/bridge-core/`, `src/` binary
-- Tests: `cargo test` (unit), `cargo test --test *` (integration), Docker compose e2e
-- Feature flags: `router` (default), `hub` (default), `serve` (default), `windows-tray` (off)
-- Build: `cargo build --release --features windows-tray` for Windows
-
-## Agent skills
 
 ### Issue tracker
 
