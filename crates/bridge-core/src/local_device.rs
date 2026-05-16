@@ -17,6 +17,7 @@ pub struct LocalDeviceConfig {
     pub vendor_id: u16,
     pub device_name: String,
     pub transport_mode: String,
+    pub lan_mac: Vec<u8>,
 }
 
 pub async fn handle_local_device(
@@ -91,7 +92,7 @@ async fn send_iam(
         priority: NetworkPriority::NORMAL,
         source: Some(NpduAddress {
             network: 1,
-            mac_address: bacnet_types::MacAddr::from_slice(lan_transport.local_mac()),
+            mac_address: bacnet_types::MacAddr::from_slice(&config.lan_mac),
         }),
         destination: Some(NpduAddress {
             network: 0xFFFF,
