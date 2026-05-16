@@ -1,4 +1,4 @@
-use bacnet_encoding::apdu::{encode_apdu, Apdu, UnconfirmedRequest};
+use bacnet_encoding::apdu::{encode_apdu, Apdu, ErrorPdu, UnconfirmedRequest};
 use bacnet_encoding::npdu::{encode_npdu, Npdu, NpduAddress};
 use bacnet_encoding::primitives::{
     encode_ctx_enumerated, encode_ctx_object_id, encode_ctx_unsigned,
@@ -6,9 +6,12 @@ use bacnet_encoding::primitives::{
 use bacnet_network::layer::ReceivedApdu;
 use bacnet_transport::port::TransportPort;
 use bacnet_types::enums::ObjectType;
-use bacnet_types::enums::{NetworkPriority, UnconfirmedServiceChoice};
+use bacnet_types::enums::{
+    ConfirmedServiceChoice, ErrorClass, ErrorCode, NetworkPriority, UnconfirmedServiceChoice,
+};
 use bacnet_types::primitives::ObjectIdentifier;
 use bytes::{Bytes, BytesMut};
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing;
 
@@ -53,6 +56,8 @@ pub async fn handle_local_device(
         config.device_id
     );
 
+    let mut apdu_cache: HashMap<u8, Vec<u8>> = HashMap::new();
+
     while let Some(msg) = local_rx.recv().await {
         let apdu = &msg.apdu;
 
@@ -90,7 +95,7 @@ pub async fn handle_local_device(
                 send_iam(&mut lan_transport, &msg, &config).await;
             }
             (0x00, 0x0C) => {
-                handle_read_property(&mut lan_transport, &msg, &config).await;
+                handle_read_property(&mut lan_transport, &msg, &config, &mut apdu_cache).await;
             }
             (0x00, 0x05) => {
                 handle_subscribe_cov(&mut lan_transport, &msg).await;
@@ -168,6 +173,7 @@ async fn handle_read_property(
     lan_transport: &mut impl TransportPort,
     msg: &ReceivedApdu,
     config: &LocalDeviceConfig,
+    apdu_cache: &mut HashMap<u8, Vec<u8>>,
 ) {
     let apdu_payload = &msg.apdu;
     if apdu_payload.len() < 11 {
@@ -175,6 +181,15 @@ async fn handle_read_property(
     }
 
     let invoke_id = apdu_payload[2];
+
+    // Bug 3: APDU retry cache — re-send cached response for duplicate invoke_id
+    if let Some(cached) = apdu_cache.get(&invoke_id) {
+        tracing::debug!("Re-sending cached response for invoke_id={}", invoke_id);
+        if let Err(e) = lan_transport.send_unicast(cached, &[]).await {
+            tracing::warn!("Failed to re-send cached response: {e}");
+        }
+        return;
+    }
 
     let prop_id = {
         // After confirmed request header (4 bytes) + ctx0 ObjectId tag (1 byte)
@@ -194,11 +209,68 @@ async fn handle_read_property(
         }
     };
 
+    // Bug 2: Unknown property — return Error PDU instead of ReadProperty-ACK
+    let known_props: [u16; 8] = [12, 13, 75, 76, 85, 97, 139, 512];
+    if !known_props.contains(&prop_id) {
+        let error_apdu = Apdu::Error(ErrorPdu {
+            invoke_id,
+            service_choice: ConfirmedServiceChoice::READ_PROPERTY,
+            error_class: ErrorClass::PROPERTY,
+            error_code: ErrorCode::UNKNOWN_PROPERTY,
+            error_data: Bytes::new(),
+        });
+
+        let mut apdu_buf = BytesMut::with_capacity(32);
+        if let Err(e) = encode_apdu(&mut apdu_buf, &error_apdu) {
+            tracing::warn!("Failed to encode error APDU: {e}");
+            return;
+        }
+
+        let npdu = Npdu {
+            is_network_message: false,
+            expecting_reply: false,
+            priority: NetworkPriority::NORMAL,
+            source: Some(NpduAddress {
+                network: 1,
+                mac_address: bacnet_types::MacAddr::from_slice(&config.lan_mac),
+            }),
+            destination: Some(NpduAddress {
+                network: 1,
+                mac_address: msg
+                    .source_network
+                    .as_ref()
+                    .map(|s| s.mac_address.clone())
+                    .unwrap_or_default(),
+            }),
+            hop_count: 255,
+            payload: apdu_buf.freeze(),
+            ..Npdu::default()
+        };
+
+        let mut buf = BytesMut::with_capacity(32);
+        if let Err(e) = encode_npdu(&mut buf, &npdu) {
+            tracing::warn!("Failed to encode error response NPDU: {e}");
+            return;
+        }
+
+        apdu_cache.insert(invoke_id, buf.to_vec());
+        if let Err(e) = lan_transport.send_unicast(&buf, &[]).await {
+            tracing::warn!("Failed to send error response: {e}");
+        }
+        return;
+    }
+
     let value_bytes = match prop_id {
+        // Bug 1: Object_Name — use fallback when device_name is empty
         75 => {
-            let name = config.device_name.as_bytes();
-            let mut v = vec![0x75, name.len() as u8];
-            v.extend_from_slice(name);
+            let name = if config.device_name.is_empty() {
+                "BACnet-Bridge"
+            } else {
+                config.device_name.as_str()
+            };
+            let bytes = name.as_bytes();
+            let mut v = vec![0x75, bytes.len() as u8];
+            v.extend_from_slice(bytes);
             v
         }
         76 => {
@@ -226,10 +298,7 @@ async fn handle_read_property(
         139 => {
             vec![0x21, 0x18]
         }
-        _ => {
-            // Default: unsigned 0
-            vec![0x21, 0x00]
-        }
+        _ => unreachable!(),
     };
 
     let rp_apdu = build_read_property_ack(invoke_id, config.device_id, prop_id, &value_bytes);
@@ -263,6 +332,9 @@ async fn handle_read_property(
         tracing::warn!("Failed to encode ReadProperty response NPDU: {e}");
         return;
     }
+
+    // Bug 3: Cache the response before sending
+    apdu_cache.insert(invoke_id, buf.to_vec());
 
     if let Err(e) = lan_transport.send_unicast(&buf, &[]).await {
         tracing::warn!("Failed to send ReadProperty response: {e}");
@@ -318,6 +390,65 @@ fn build_subscribe_cov_ack(invoke_id: u8) -> Bytes {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bacnet_encoding::apdu::decode_apdu;
+
+    #[test]
+    fn test_object_name_fallback_non_empty() {
+        let fallback = "BACnet-Bridge";
+        let bytes = fallback.as_bytes();
+        let mut value_bytes = vec![0x75, bytes.len() as u8];
+        value_bytes.extend_from_slice(bytes);
+
+        let ack = build_read_property_ack(1, 99999, 75, &value_bytes);
+        let raw = ack.to_vec();
+
+        let opening = raw.iter().position(|&b| b == 0x3E).unwrap();
+        assert_eq!(raw[opening + 1], 0x75, "must be CharacterString tag");
+        assert!(
+            raw[opening + 2] > 0,
+            "Object_Name length must be non-zero"
+        );
+    }
+
+    #[test]
+    fn test_unknown_property_error_pdu_format() {
+        let error_apdu = Apdu::Error(ErrorPdu {
+            invoke_id: 42,
+            service_choice: ConfirmedServiceChoice::READ_PROPERTY,
+            error_class: ErrorClass::PROPERTY,
+            error_code: ErrorCode::UNKNOWN_PROPERTY,
+            error_data: Bytes::new(),
+        });
+
+        let mut buf = BytesMut::new();
+        encode_apdu(&mut buf, &error_apdu).unwrap();
+
+        let decoded = decode_apdu(buf.freeze()).unwrap();
+        match decoded {
+            Apdu::Error(pdu) => {
+                assert_eq!(pdu.invoke_id, 42);
+                assert_eq!(pdu.service_choice, ConfirmedServiceChoice::READ_PROPERTY);
+                assert_eq!(pdu.error_class, ErrorClass::PROPERTY);
+                assert_eq!(pdu.error_code, ErrorCode::UNKNOWN_PROPERTY);
+                assert!(pdu.error_data.is_empty());
+            }
+            other => panic!("expected Error PDU, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_apdu_cache_dedup() {
+        let mut cache: HashMap<u8, Vec<u8>> = HashMap::new();
+
+        cache.insert(42, vec![0x30, 0x01, 0x0C]);
+
+        assert!(cache.contains_key(&42), "same invoke_id must be a cache hit");
+        assert!(
+            !cache.contains_key(&99),
+            "different invoke_id must be a cache miss"
+        );
+        assert_eq!(cache.get(&42), Some(&vec![0x30, 0x01, 0x0C]));
+    }
 
     #[test]
     fn test_prop_139_context_tag_is_3_not_2() {
