@@ -6,6 +6,7 @@ use bacnet_transport::any::AnyTransport;
 use bacnet_transport::bbmd::BbmdState;
 use bacnet_transport::bip::BipTransport;
 use bacnet_transport::loopback::LoopbackTransport;
+use bacnet_transport::port::TransportPort;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing;
@@ -83,8 +84,16 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
     let (remote, _remote_bbmd_state) = build_remote_transport(config).await?;
 
     let local_loop_mac = vec![0x01, 0x02];
-    let (local_loop_router, local_loop_device) =
+    let (local_loop_router, mut local_loop_device) =
         LoopbackTransport::pair(vec![0x01, 0x01], local_loop_mac.clone());
+
+    let mut loopback_rx = local_loop_device
+        .start()
+        .await
+        .map_err(|e| BridgeError::Router(format!("loopback device start: {e}")))?;
+    tokio::spawn(async move {
+        while let Some(_) = loopback_rx.recv().await {}
+    });
 
     let lan_mac = encode_bip_mac(actual_lan_ip, lan_port);
 
