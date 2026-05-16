@@ -215,7 +215,7 @@ async fn handle_read_property(
     };
 
     // Bug 2: Unknown property — return Error PDU instead of ReadProperty-ACK
-    let known_props: [u16; 9] = [11, 12, 13, 75, 76, 85, 97, 139, 512];
+    let known_props: [u16; 10] = [11, 12, 13, 62, 75, 76, 85, 97, 139, 512];
     if !known_props.contains(&prop_id) {
         let error_apdu = Apdu::Error(ErrorPdu {
             invoke_id,
@@ -239,14 +239,10 @@ async fn handle_read_property(
                 network: config.local_network,
                 mac_address: bacnet_types::MacAddr::from_slice(&config.local_mac),
             }),
-            destination: Some(NpduAddress {
-                network: config.local_network,
-                mac_address: msg
-                    .source_network
-                    .as_ref()
-                    .map(|s| s.mac_address.clone())
-                    .unwrap_or_default(),
-            }),
+            destination: msg.source_network.clone().or(Some(NpduAddress {
+                network: 1,
+                mac_address: msg.source_mac.clone(),
+            })),
             hop_count: 255,
             payload: apdu_buf.freeze(),
             ..Npdu::default()
@@ -294,6 +290,9 @@ async fn handle_read_property(
         13 => {
             vec![0x91, 0x18]
         }
+        62 => {
+            vec![0x91, 0x02]
+        }
         512 => {
             let mode = config.transport_mode.as_bytes();
             let mut v = vec![0x75, mode.len() as u8];
@@ -322,14 +321,7 @@ async fn handle_read_property(
             network: config.local_network,
             mac_address: bacnet_types::MacAddr::from_slice(&config.local_mac),
         }),
-        destination: Some(NpduAddress {
-            network: config.local_network,
-            mac_address: msg
-                .source_network
-                .as_ref()
-                .map(|s| s.mac_address.clone())
-                .unwrap_or_default(),
-        }),
+        destination: msg.source_network.clone(),
         hop_count: 255,
         payload: rp_apdu,
         ..Npdu::default()
@@ -437,7 +429,10 @@ async fn handle_write_property(
     if let Err(e) = lan_transport.send_unicast(&buf, &[]).await {
         tracing::warn!("Failed to send WriteProperty error response: {e}");
     } else {
-        tracing::debug!("Sent WriteProperty error (WRITE_ACCESS_DENIED) invoke_id={}", invoke_id);
+        tracing::debug!(
+            "Sent WriteProperty error (WRITE_ACCESS_DENIED) invoke_id={}",
+            invoke_id
+        );
     }
 }
 
@@ -464,10 +459,7 @@ mod tests {
 
         let opening = raw.iter().position(|&b| b == 0x3E).unwrap();
         assert_eq!(raw[opening + 1], 0x75, "must be CharacterString tag");
-        assert!(
-            raw[opening + 2] > 0,
-            "Object_Name length must be non-zero"
-        );
+        assert!(raw[opening + 2] > 0, "Object_Name length must be non-zero");
     }
 
     #[test]
@@ -502,7 +494,10 @@ mod tests {
 
         cache.insert(42, vec![0x30, 0x01, 0x0C]);
 
-        assert!(cache.contains_key(&42), "same invoke_id must be a cache hit");
+        assert!(
+            cache.contains_key(&42),
+            "same invoke_id must be a cache hit"
+        );
         assert!(
             !cache.contains_key(&99),
             "different invoke_id must be a cache miss"
