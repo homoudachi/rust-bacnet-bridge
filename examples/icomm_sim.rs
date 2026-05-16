@@ -41,7 +41,8 @@ fn extract_device_id(apdu: &[u8]) -> Option<u32> {
     if apdu.len() < 7 {
         return None;
     }
-    if apdu[2] == 0xC4 {
+    let tag = apdu[2];
+    if tag == 0x0C || tag == 0xC4 {
         let bytes: [u8; 4] = [apdu[3], apdu[4], apdu[5], apdu[6]];
         let raw = u32::from_be_bytes(bytes);
         Some(raw & 0x3F_FFFF)

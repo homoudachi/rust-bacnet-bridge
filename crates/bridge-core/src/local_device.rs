@@ -1,7 +1,13 @@
+use bacnet_encoding::apdu::{encode_apdu, Apdu, UnconfirmedRequest};
 use bacnet_encoding::npdu::{encode_npdu, Npdu, NpduAddress};
+use bacnet_encoding::primitives::{
+    encode_ctx_enumerated, encode_ctx_object_id, encode_ctx_unsigned,
+};
 use bacnet_network::layer::ReceivedApdu;
 use bacnet_transport::port::TransportPort;
-use bacnet_types::enums::NetworkPriority;
+use bacnet_types::enums::{NetworkPriority, UnconfirmedServiceChoice};
+use bacnet_types::primitives::ObjectIdentifier;
+use bacnet_types::enums::ObjectType;
 use bytes::BytesMut;
 use tokio::sync::mpsc;
 use tracing;
@@ -54,22 +60,30 @@ async fn send_iam(
     _msg: &ReceivedApdu,
     config: &LocalDeviceConfig,
 ) {
-    let mut apdu = BytesMut::with_capacity(32);
+    let oid = match ObjectIdentifier::new(ObjectType::DEVICE, config.device_id) {
+        Ok(oid) => oid,
+        Err(e) => {
+            tracing::warn!("Invalid device ID {}: {e}", config.device_id);
+            return;
+        }
+    };
 
-    apdu.extend_from_slice(&[0x00, 0x00]);
+    let mut service_request = BytesMut::with_capacity(32);
+    encode_ctx_object_id(&mut service_request, 0, &oid);
+    encode_ctx_unsigned(&mut service_request, 1, 1476);
+    encode_ctx_enumerated(&mut service_request, 2, 0);
+    encode_ctx_unsigned(&mut service_request, 3, config.vendor_id as u64);
 
-    let device_id = config.device_id;
-    let id_bytes = device_id.to_be_bytes();
-    let start_byte = 4 - id_bytes.len();
-    for _ in 0..start_byte {
-        apdu.extend_from_slice(&[0x00]);
+    let apdu = Apdu::UnconfirmedRequest(UnconfirmedRequest {
+        service_choice: UnconfirmedServiceChoice::I_AM,
+        service_request: service_request.freeze(),
+    });
+
+    let mut apdu_buf = BytesMut::with_capacity(64);
+    if let Err(e) = encode_apdu(&mut apdu_buf, &apdu) {
+        tracing::warn!("Failed to encode I-Am APDU: {e}");
+        return;
     }
-    apdu.extend_from_slice(&id_bytes);
-
-    apdu.extend_from_slice(&[0x22, 0x05, 0xC4, 0x91, 0x00]);
-
-    let vendor_id = config.vendor_id;
-    apdu.extend_from_slice(&[0x22, (vendor_id >> 8) as u8, vendor_id as u8]);
 
     let npdu = Npdu {
         is_network_message: false,
@@ -81,10 +95,10 @@ async fn send_iam(
         }),
         destination: Some(NpduAddress {
             network: 0xFFFF,
-            mac_address: bacnet_types::MacAddr::new(),
+            mac_address: bacnet_types::MacAddr::from_slice(&[]),
         }),
         hop_count: 255,
-        payload: apdu.freeze(),
+        payload: apdu_buf.freeze(),
         ..Npdu::default()
     };
 

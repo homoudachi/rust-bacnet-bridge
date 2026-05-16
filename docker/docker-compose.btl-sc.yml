@@ -55,27 +55,10 @@ services:
     depends_on:
       site-router:
         condition: service_healthy
-    command: ["serve", "--bind", "0.0.0.0:47808", "--device-id", "4194303"]
+    command: ["serve", "--device-instance", "4194303"]
     networks:
       default:
         ipv4_address: 172.20.0.4
-
-  bacnet-mcp:
-    profiles: ["mcp"]
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.mcp
-    depends_on:
-      site-router:
-        condition: service_healthy
-    command: ["--config", "/config/mcp.json", "--transport", "http", "--bind", "0.0.0.0:3000"]
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./config/mcp.json:/config/mcp.json:ro
-    networks:
-      default:
-        ipv4_address: 172.20.0.10
 
   btl-runner-sc:
     profiles: ["section-9"]
