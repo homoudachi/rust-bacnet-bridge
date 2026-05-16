@@ -2,7 +2,7 @@
 
 ## Status
 
-**Phase:** Phase 6 (polish) — ~99% complete. All five implementation phases built; all polish items completed; FSD alignment audit complete 2026-05-16.
+**Phase:** Phase 6 (polish) — **Complete.** All five implementation phases built; all polish items completed; BTL Section 9 (494/494) and Section 10 (15/15) passing; FSD alignment audit complete 2026-05-16.
 
 ## Key design decisions (from grilling session)
 
@@ -65,7 +65,7 @@
 
 ### Phase 6: Polish
 31. Dependabot for auto version bumps
-32. BTL harness integration as separate CI job (~253 router-relevant tests: BVLC/BBMD §9.3, SC §9.9, routing §10)
+32. BTL harness integration as CI job ~~(~253 router-relevant tests: BVLC/BBMD §9.3, SC §9.9, routing §10)~~ — **Complete: 494 DLL + 15 routing tests all pass**
 33. Release build: `cargo build --release --features windows-tray`
 
 ## All Phase 6 items completed
@@ -106,17 +106,22 @@
 - [x] .gitignore hardened (secrets patterns)
 - [x] MIT LICENSE added
 - [x] Legacy Python prototype expunged from git history
+- [x] BTL Section 9 (DLL): 494/494 tests passing (#63)
+- [x] BTL Section 10 (Routing): 15/15 tests passing (#63)
+- [x] ReadProperty ACK encoding fix: context tag [2]→[3], service dispatch apdu[1]→apdu[3] (#59, #63)
+- [x] NPDU routing fix: use BIP MAC instead of loopback MAC, explicit destination network (#63)
+- [x] BBMD LAN enable: `enable_bbmd(vec![])` on LAN transport for foreign device registration (#63)
+- [x] SubscribeCOV handler: stub SimpleAck response for COV subscription requests (#63)
 
 ### Notes
 
-- **BTL harness (item 32):** The `docker-compose.btl.yml` had a hostname resolution bug — `site-router` hostname was not resolvable from the BTL container. Fixed by using static IP `172.20.0.3` instead.
+- **BTL harness:** Full BTL compliance verified — Section 9 (494/494 DLL tests) and Section 10 (15/15 routing tests) all pass. The compose uses static IP `172.20.0.3` for the site-router since Docker compose networking does not resolve service hostnames from the BTL runner container.
 
 - **rusty-bacnet#22:** BBMD transport requires `BipTransport::bind()` to `[0; 4]` (INADDR_ANY) before `enable_bbmd()`, and the BIP MAC address must be derived from the local IP+port combination rather than calling `local_mac()` pre-start. A PR (#21) is pending upstream.
 
 ### Known dependencies
 
 - **rusty-bacnet#22** (PR#21 pending): BBMD transport workaround described above. Blocks removal of the INADDR_ANY bind and MAC computation workaround.
-- **BTL harness hostname limitation:** Docker compose networking does not resolve service hostnames from the BTL container in the current topology. Requires static IP assignment or extra networks configuration.
 
 ## Next steps (future)
 

@@ -2,14 +2,14 @@
 
 ## Current state
 
-~99% complete. Phase 6 (polish) closing out with BTL/BBMD hardening.
+Phase 6 complete. All polish + BTL hardening done.
 
 **Built and working:**
 - Workspace: root `Cargo.toml` with `crates/bridge-core` + `src/` binary
-- Core routing: `BACnetRouter` with two ports (LAN BIP + SC or BBMD transport)
+- Core routing: `BACnetRouter` with three ports (LAN BIP BBMD + SC/BBMD remote + loopback local device)
 - Config: TOML load/save, env-var overrides, auto-generation on first run
 - Transports: BACnet/SC spoke via `TlsWebSocket`, BBMD via `BipTransport::enable_bbmd()`
-- FDT: foreign device table management (Tailscale mode only)
+- FDT: foreign device table management (Tailscale mode only), wired to real BbmdState
 - State machine: `AppState` (Stopped/Starting/Running/Stopping) with `tokio::sync::watch`
 - CLI: `router`, `hub`, `serve` subcommands via clap
 - Embedded Hub mode: `--with-hub` runs SC Hub + Router simultaneously
@@ -18,11 +18,13 @@
 - Windows system tray: green/amber/red DIB icons, right-click menu, state-gated items
 - Docker: compose topologies for SC, BBMD, and BTL harness
 - CI: GitHub Actions (fmt, clippy, test, docker e2e, BTL on push)
-- Tests: 83 tests (unit + integration) covering config, FDT, routing, SC, BBMD, transport switch, dashboard API
+- Tests: 88 tests (unit + integration) covering config, FDT, routing, SC, BBMD, transport switch, dashboard API
 - ACME TLS support for Hub mode (stubbed, staging-ready)
 - Dependabot configuration (weekly Cargo + GitHub Actions)
 - Release build CI artifact (`bacnet-bridge.exe` upload)
-- BTL harness CI integration (health checks, improved compose)
+- BTL harness CI integration (health checks, improved compose, static IP LAN bind)
+- BTL section 9 (DLL): 494/494 tests passing
+- BTL section 10 (Routing): 15/15 tests passing
 - Router Start command (state-gated stop-build-start)
 - Full transport switch cycle (stop-build-start)
 - System interface detection via `get_if_addrs` (runtime, not just config)
