@@ -15,6 +15,8 @@ use crate::error::BridgeError;
 use crate::local_device::{self, LocalDeviceConfig};
 use crate::transport::build_remote_transport;
 
+const LOOPBACK_NETWORK: u16 = 65520;
+
 pub struct RunningRouter {
     router: BACnetRouter,
     _local_device_task: JoinHandle<()>,
@@ -80,8 +82,9 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
     let lan_bbmd_state = lan_bip.bbmd_state().cloned();
     let (remote, _remote_bbmd_state) = build_remote_transport(config).await?;
 
+    let local_loop_mac = vec![0x01, 0x02];
     let (local_loop_router, local_loop_device) =
-        LoopbackTransport::pair(vec![0x01, 0x01], vec![0x01, 0x02]);
+        LoopbackTransport::pair(vec![0x01, 0x01], local_loop_mac.clone());
 
     let lan_mac = encode_bip_mac(actual_lan_ip, lan_port);
 
@@ -96,7 +99,7 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
         },
         RouterPort {
             transport: AnyTransport::from(local_loop_router),
-            network_number: 0,
+            network_number: LOOPBACK_NETWORK,
         },
     ];
 
@@ -110,6 +113,8 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
         device_name: config.router.device_name.clone(),
         transport_mode: config.router.transport.clone(),
         lan_mac,
+        local_network: LOOPBACK_NETWORK,
+        local_mac: local_loop_mac,
     };
 
     tracing::info!(
