@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE_FILE="docker/docker-compose.btl-sc.yml"
 TARGET="x86_64-unknown-linux-musl"
@@ -41,8 +41,8 @@ echo "Building (target: ${TARGET})..."
 cargo build --release --target "$TARGET" --no-default-features --features router,hub
 
 BINARY="target/${TARGET}/release/bacnet-bridge"
-if [ ! -f "$BINARY" ]; then
-    echo "ERROR: Binary not found at ${BINARY}"
+if [ ! -x "$BINARY" ]; then
+    echo "ERROR: Binary not found or not executable at ${BINARY}"
     exit 1
 fi
 
@@ -53,5 +53,18 @@ docker cp "$BINARY" "${CONTAINER_ID}:/usr/local/bin/bacnet-bridge"
 # 5. Restart site-router
 echo "Restarting site-router..."
 docker compose -f "$COMPOSE_FILE" restart site-router
+
+# 6. Wait for healthcheck to pass (start_period=10s + retries)
+echo "Waiting for site-router healthcheck..."
+for i in $(seq 1 30); do
+    status=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_ID" 2>/dev/null || echo "starting")
+    if [ "$status" = "healthy" ]; then
+        break
+    fi
+    sleep 1
+done
+if [ "$status" != "healthy" ]; then
+    echo "WARNING: site-router healthcheck did not pass (status: ${status:-unknown})"
+fi
 
 echo "Done (${SECONDS}s)"

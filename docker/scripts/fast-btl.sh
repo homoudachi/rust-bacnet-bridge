@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE_FILE="docker/docker-compose.btl-sc.yml"
 SECTION=""
@@ -9,6 +9,10 @@ SECTION=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --section)
+            if [[ $# -lt 2 ]]; then
+                echo "ERROR: --section requires a value (9 or 10)"
+                exit 1
+            fi
             SECTION="$2"
             shift 2
             ;;
