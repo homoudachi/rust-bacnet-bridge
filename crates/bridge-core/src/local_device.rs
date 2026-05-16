@@ -5,9 +5,9 @@ use bacnet_encoding::primitives::{
 };
 use bacnet_network::layer::ReceivedApdu;
 use bacnet_transport::port::TransportPort;
+use bacnet_types::enums::ObjectType;
 use bacnet_types::enums::{NetworkPriority, UnconfirmedServiceChoice};
 use bacnet_types::primitives::ObjectIdentifier;
-use bacnet_types::enums::ObjectType;
 use bytes::BytesMut;
 use tokio::sync::mpsc;
 use tracing;
