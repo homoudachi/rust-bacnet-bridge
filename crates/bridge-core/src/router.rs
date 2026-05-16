@@ -51,18 +51,39 @@ fn encode_bip_mac(ip: Ipv4Addr, port: u16) -> Vec<u8> {
     ]
 }
 
+fn resolve_local_ip() -> Option<Ipv4Addr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    if let std::net::IpAddr::V4(ip) = socket.local_addr().ok()?.ip() {
+        Some(ip)
+    } else {
+        None
+    }
+}
+
+fn resolved_lan_ip(lan_ip: Ipv4Addr) -> Ipv4Addr {
+    if lan_ip.is_unspecified() {
+        resolve_local_ip().unwrap_or(Ipv4Addr::new(127, 0, 0, 1))
+    } else {
+        lan_ip
+    }
+}
+
 pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, BridgeError> {
     let lan_ip = parse_lan_ip(&config.router.lan.interface);
     let lan_port = config.router.lan.port;
     let broadcast_addr = broadcast_from_ip(lan_ip);
+    let actual_lan_ip = resolved_lan_ip(lan_ip);
 
-    let lan_bip = BipTransport::new(Ipv4Addr::UNSPECIFIED, lan_port, broadcast_addr);
-    let (remote, bbmd_state) = build_remote_transport(config).await?;
+    let mut lan_bip = BipTransport::new(Ipv4Addr::UNSPECIFIED, lan_port, broadcast_addr);
+    lan_bip.enable_bbmd(vec![]);
+    let lan_bbmd_state = lan_bip.bbmd_state().cloned();
+    let (remote, _remote_bbmd_state) = build_remote_transport(config).await?;
 
     let (local_loop_router, local_loop_device) =
         LoopbackTransport::pair(vec![0x01, 0x01], vec![0x01, 0x02]);
 
-    let lan_mac = encode_bip_mac(lan_ip, lan_port);
+    let lan_mac = encode_bip_mac(actual_lan_ip, lan_port);
 
     let ports = vec![
         RouterPort {
@@ -92,8 +113,9 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
     };
 
     tracing::info!(
-        "Router started: LAN {}:{} (broadcast {}), remote transport={}",
+        "Router started: LAN {} (resolved {}) :{}, broadcast {}, remote transport={}",
         lan_ip,
+        actual_lan_ip,
         lan_port,
         broadcast_addr,
         config.router.transport,
@@ -106,7 +128,7 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
     Ok(RunningRouter {
         router,
         _local_device_task: local_task,
-        bbmd_state,
+        bbmd_state: lan_bbmd_state,
     })
 }
 

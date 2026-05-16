@@ -77,3 +77,13 @@ Single-context repo: `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ### BTL harness dependency
 External: `jscott3201/rusty-bacnet-btl-harness`. `--target` only accepts bare IPv4, not hostnames.
+
+## Orchestration & Context Management Protocol
+
+To prevent context bloat and cognitive looping:
+
+1. **The Breakdown Rule** — Tasks with >2 distinct steps or deep implementation must be broken into minimal TODOs. Focus only on the immediate next milestone.
+2. **Recursive Delegation** — Use subagents for ALL implementation. Each subagent prompt: single objective, explicit boundaries (what NOT to change), zero unnecessary global context.
+3. **Output Control** — Maintain a clean high-level summary. Never deep-dive analysis in main context. If writing walls of text, stop and split into sub-tasks.
+4. **Fast Feedback** — Prefer rapid validation loops (MCP sidecar, unit tests, manual probes) over slow ones (full Docker rebuild). Only run slow verification once encoding is confirmed correct.
+5. **After Each Subagent** — Update TODO, report 1-line result, move to next. Don't analyze subagent output in detail unless it reports BLOCKED or NEEDS_CONTEXT.

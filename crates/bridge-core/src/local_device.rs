@@ -8,9 +8,32 @@ use bacnet_transport::port::TransportPort;
 use bacnet_types::enums::ObjectType;
 use bacnet_types::enums::{NetworkPriority, UnconfirmedServiceChoice};
 use bacnet_types::primitives::ObjectIdentifier;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use tokio::sync::mpsc;
 use tracing;
+
+pub fn build_read_property_ack(
+    invoke_id: u8,
+    device_id: u32,
+    prop_id: u16,
+    value_bytes: &[u8],
+) -> Bytes {
+    let oid = match ObjectIdentifier::new(ObjectType::DEVICE, device_id) {
+        Ok(oid) => oid,
+        Err(_) => return Bytes::new(),
+    };
+
+    let mut rp_apdu = BytesMut::with_capacity(64);
+    rp_apdu.extend_from_slice(&[0x30, invoke_id]);
+    rp_apdu.extend_from_slice(&[0x0C]);
+    encode_ctx_object_id(&mut rp_apdu, 0, &oid);
+    encode_ctx_unsigned(&mut rp_apdu, 1, prop_id as u64);
+    rp_apdu.extend_from_slice(&[0x3E]);
+    rp_apdu.extend_from_slice(value_bytes);
+    rp_apdu.extend_from_slice(&[0x3F]);
+
+    rp_apdu.freeze()
+}
 
 pub struct LocalDeviceConfig {
     pub device_id: u32,
@@ -33,12 +56,34 @@ pub async fn handle_local_device(
     while let Some(msg) = local_rx.recv().await {
         let apdu = &msg.apdu;
 
+        tracing::debug!(
+            "Received local APDU: len={} bytes={:02x?}",
+            apdu.len(),
+            apdu
+        );
+
         if apdu.len() < 2 {
             continue;
         }
 
         let pdu_type = apdu[0] >> 4;
-        let service = apdu[1];
+        let segmented = pdu_type == 0x00 && apdu.len() > 2 && (apdu[0] & 0x08) != 0;
+        let service = if pdu_type == 0x00 && apdu.len() > 3 {
+            // Confirmed Request: [0]=type+flags [1]=max_seg|max_apdu [2]=invoke_id [3]=service_choice
+            // If segmented: [3]=seq [4]=window [5]=service_choice
+            if segmented && apdu.len() > 5 {
+                apdu[5]
+            } else {
+                apdu[3]
+            }
+        } else if pdu_type == 0x01 && apdu.len() > 1 {
+            // Unconfirmed Request: [0]=type [1]=service_choice
+            apdu[1]
+        } else if apdu.len() > 1 {
+            apdu[1]
+        } else {
+            continue;
+        };
 
         match (pdu_type, service) {
             (0x01, 0x08) => {
@@ -46,6 +91,9 @@ pub async fn handle_local_device(
             }
             (0x00, 0x0C) => {
                 handle_read_property(&mut lan_transport, &msg, &config).await;
+            }
+            (0x00, 0x05) => {
+                handle_subscribe_cov(&mut lan_transport, &msg).await;
             }
             _ => {
                 tracing::debug!(
@@ -122,68 +170,72 @@ async fn handle_read_property(
     config: &LocalDeviceConfig,
 ) {
     let apdu_payload = &msg.apdu;
-    if apdu_payload.len() < 8 {
+    if apdu_payload.len() < 11 {
         return;
     }
 
     let invoke_id = apdu_payload[2];
 
-    let device_id = config.device_id;
-    let id_bytes = device_id.to_be_bytes();
-    let start_byte = 4 - id_bytes.len();
-
-    let prop_id_pos = 6 + start_byte;
-    let prop_id = if apdu_payload.len() > prop_id_pos + 1 {
-        ((apdu_payload[prop_id_pos] as u16) << 8) | (apdu_payload[prop_id_pos + 1] as u16)
-    } else {
-        return;
+    let prop_id = {
+        // After confirmed request header (4 bytes) + ctx0 ObjectId tag (1 byte)
+        // + ObjectId value (4 bytes) = position 9 for ctx1 (PropertyIdentifier tag)
+        // ctx1 tag byte = (1 << 4) | (1 << 3) | length
+        //   length 1 → 0x19, length 2 → 0x1A, length 3 → 0x1B, length 4 → 0x1C
+        let ctx1 = apdu_payload[9];
+        let prop_len = ctx1 & 0x07;
+        if prop_len == 0 || prop_len > 4 || apdu_payload.len() <= 10 {
+            return;
+        }
+        let value_start = 10;
+        match prop_len {
+            1 => apdu_payload[value_start] as u16,
+            2 => u16::from_be_bytes([apdu_payload[value_start], apdu_payload[value_start + 1]]),
+            _ => return,
+        }
     };
 
-    let mut rp_apdu = BytesMut::with_capacity(64);
-    rp_apdu.extend_from_slice(&[0x30, invoke_id]);
-    rp_apdu.extend_from_slice(&[0x0C]);
-    for _ in 0..start_byte {
-        rp_apdu.extend_from_slice(&[0x00]);
-    }
-    rp_apdu.extend_from_slice(&id_bytes);
-
-    match prop_id {
+    let value_bytes = match prop_id {
         75 => {
-            rp_apdu.extend_from_slice(&[0x19, 0x4B]);
             let name = config.device_name.as_bytes();
-            rp_apdu.extend_from_slice(&[0x75, name.len() as u8]);
-            rp_apdu.extend_from_slice(name);
+            let mut v = vec![0x75, name.len() as u8];
+            v.extend_from_slice(name);
+            v
         }
         76 => {
-            rp_apdu.extend_from_slice(&[0x19, 0x4C]);
             let vid = config.vendor_id;
-            rp_apdu.extend_from_slice(&[0x22, (vid >> 8) as u8, vid as u8]);
+            vec![0x22, (vid >> 8) as u8, vid as u8]
         }
         85 => {
-            rp_apdu.extend_from_slice(&[0x19, 0x55]);
-            rp_apdu.extend_from_slice(&[0x75, 5, 0x30, 0x2E, 0x31, 0x2E, 0x30]);
+            vec![0x75, 5, 0x30, 0x2E, 0x31, 0x2E, 0x30]
         }
         12 => {
-            rp_apdu.extend_from_slice(&[0x19, 0x0C]);
-            rp_apdu.extend_from_slice(&[0x91, 0x00]);
+            vec![0x91, 0x00]
         }
         13 => {
-            rp_apdu.extend_from_slice(&[0x19, 0x0D]);
-            rp_apdu.extend_from_slice(&[0x91, 0x18]);
+            vec![0x91, 0x18]
         }
         512 => {
-            rp_apdu.extend_from_slice(&[0x1A, 0x02, 0x00]);
             let mode = config.transport_mode.as_bytes();
-            rp_apdu.extend_from_slice(&[0x75, mode.len() as u8]);
-            rp_apdu.extend_from_slice(mode);
+            let mut v = vec![0x75, mode.len() as u8];
+            v.extend_from_slice(mode);
+            v
+        }
+        97 => {
+            vec![0x85, 5, 5, 0x84, 0x0B, 0x00, 0x20]
+        }
+        139 => {
+            vec![0x21, 0x18]
         }
         _ => {
-            rp_apdu.extend_from_slice(&[0x19, 0x00]);
-            rp_apdu.extend_from_slice(&[0x5F]);
+            // Default: unsigned 0
+            vec![0x21, 0x00]
         }
-    }
+    };
 
-    rp_apdu.extend_from_slice(&[0x0F]);
+    let rp_apdu = build_read_property_ack(invoke_id, config.device_id, prop_id, &value_bytes);
+    if rp_apdu.is_empty() {
+        return;
+    }
 
     let npdu = Npdu {
         is_network_message: false,
@@ -191,11 +243,18 @@ async fn handle_read_property(
         priority: NetworkPriority::NORMAL,
         source: Some(NpduAddress {
             network: 1,
-            mac_address: bacnet_types::MacAddr::from_slice(lan_transport.local_mac()),
+            mac_address: bacnet_types::MacAddr::from_slice(&config.lan_mac),
         }),
-        destination: msg.source_network.clone(),
+        destination: Some(NpduAddress {
+            network: 1,
+            mac_address: msg
+                .source_network
+                .as_ref()
+                .map(|s| s.mac_address.clone())
+                .unwrap_or_default(),
+        }),
         hop_count: 255,
-        payload: rp_apdu.freeze(),
+        payload: rp_apdu,
         ..Npdu::default()
     };
 
@@ -207,5 +266,119 @@ async fn handle_read_property(
 
     if let Err(e) = lan_transport.send_unicast(&buf, &[]).await {
         tracing::warn!("Failed to send ReadProperty response: {e}");
+    }
+}
+
+async fn handle_subscribe_cov(lan_transport: &mut impl TransportPort, msg: &ReceivedApdu) {
+    let apdu_payload = &msg.apdu;
+    if apdu_payload.len() < 3 {
+        return;
+    }
+
+    let invoke_id = apdu_payload[2];
+
+    let response = build_subscribe_cov_ack(invoke_id);
+    if response.is_empty() {
+        return;
+    }
+
+    let npdu = Npdu {
+        is_network_message: false,
+        expecting_reply: false,
+        priority: NetworkPriority::NORMAL,
+        source: Some(NpduAddress {
+            network: 1,
+            mac_address: bacnet_types::MacAddr::from_slice(lan_transport.local_mac()),
+        }),
+        destination: msg.source_network.clone(),
+        hop_count: 255,
+        payload: response,
+        ..Npdu::default()
+    };
+
+    let mut buf = BytesMut::with_capacity(64);
+    if let Err(e) = encode_npdu(&mut buf, &npdu) {
+        tracing::warn!("Failed to encode SubscribeCOV response NPDU: {e}");
+        return;
+    }
+
+    if let Err(e) = lan_transport.send_unicast(&buf, &[]).await {
+        tracing::warn!("Failed to send SubscribeCOV response: {e}");
+    } else {
+        tracing::debug!("Sent SubscribeCOV SimpleAck (invoke_id={})", invoke_id);
+    }
+}
+
+fn build_subscribe_cov_ack(invoke_id: u8) -> Bytes {
+    let mut buf = BytesMut::with_capacity(3);
+    buf.extend_from_slice(&[0x20, invoke_id, 0x05]);
+    buf.freeze()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prop_139_context_tag_is_3_not_2() {
+        let ack = build_read_property_ack(1, 99999, 139, &[0x21, 0x18]);
+        // Expected APDU structure (verified from actual encoding):
+        //   0x30, 0x01, 0x0C,                        // ComplexAck + ReadProperty
+        //   0x0C, 0x02, 0x01, 0x86, 0x9F,            // Context[0] DEVICE(8), 99999
+        //   0x19, 0x8B,                               // Context[1] PROP 139
+        //   0x3E,                                     // Context[3] OPENING ← was 0x2E
+        //   0x21, 0x18,                               // Unsigned 24
+        //   0x3F                                      // Context[3] CLOSING ← was 0x2F
+        let expected = vec![
+            0x30, 0x01, 0x0C, 0x0C, 0x02, 0x01, 0x86, 0x9F, 0x19, 0x8B, 0x3E, 0x21, 0x18, 0x3F,
+        ];
+        assert_eq!(ack.to_vec(), expected, "PROP 139 encoding has wrong bytes");
+    }
+
+    #[test]
+    fn test_prop_97_context_tag_is_3_not_2() {
+        let ack = build_read_property_ack(1, 99999, 97, &[0x85, 5, 5, 0x84, 0x0B, 0x00, 0x20]);
+        let expected = vec![
+            0x30, 0x01, 0x0C, 0x0C, 0x02, 0x01, 0x86, 0x9F, 0x19, 0x61, 0x3E, 0x85, 5, 5, 0x84,
+            0x0B, 0x00, 0x20, 0x3F,
+        ];
+        assert_eq!(ack.to_vec(), expected, "PROP 97 encoding has wrong bytes");
+    }
+
+    #[test]
+    fn test_subscribe_cov_simple_ack() {
+        let ack = build_subscribe_cov_ack(42);
+        let expected = vec![0x20, 42, 0x05];
+        assert_eq!(
+            ack.to_vec(),
+            expected,
+            "SubscribeCOV SimpleAck has wrong bytes"
+        );
+    }
+
+    #[test]
+    fn test_subscribe_cov_simple_ack_default_invoke() {
+        let ack = build_subscribe_cov_ack(0);
+        assert_eq!(ack.len(), 3);
+        assert_eq!(ack[1], 0);
+        assert_eq!(ack[2], 0x05);
+    }
+
+    #[test]
+    fn test_context_tag_not_0x2e_or_0x2f() {
+        for prop_id in [12u16, 13, 75, 76, 85, 97, 139, 512] {
+            let ack = build_read_property_ack(1, 99999, prop_id, &[0x5F]);
+            let bytes = ack.to_vec();
+            assert!(
+                !bytes.contains(&0x2E),
+                "PROP {} contains 0x2E (old buggy tag [2] opening)",
+                prop_id
+            );
+            assert!(
+                !bytes.contains(&0x2F),
+                "PROP {} contains 0x2F (old buggy tag [2] closing)",
+                prop_id
+            );
+        }
     }
 }
