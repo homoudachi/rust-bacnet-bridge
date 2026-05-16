@@ -44,6 +44,8 @@ pub struct LocalDeviceConfig {
     pub device_name: String,
     pub transport_mode: String,
     pub lan_mac: Vec<u8>,
+    pub local_network: u16,
+    pub local_mac: Vec<u8>,
 }
 
 pub async fn handle_local_device(
@@ -100,6 +102,9 @@ pub async fn handle_local_device(
             (0x00, 0x05) => {
                 handle_subscribe_cov(&mut lan_transport, &msg).await;
             }
+            (0x00, 0x0F) => {
+                handle_write_property(&mut lan_transport, &msg, &config).await;
+            }
             _ => {
                 tracing::debug!(
                     "Unhandled local APDU: type=0x{pdu_type:02X} service=0x{service:02X}"
@@ -144,8 +149,8 @@ async fn send_iam(
         expecting_reply: false,
         priority: NetworkPriority::NORMAL,
         source: Some(NpduAddress {
-            network: 1,
-            mac_address: bacnet_types::MacAddr::from_slice(&config.lan_mac),
+            network: config.local_network,
+            mac_address: bacnet_types::MacAddr::from_slice(&config.local_mac),
         }),
         destination: Some(NpduAddress {
             network: 0xFFFF,
@@ -210,7 +215,7 @@ async fn handle_read_property(
     };
 
     // Bug 2: Unknown property — return Error PDU instead of ReadProperty-ACK
-    let known_props: [u16; 8] = [12, 13, 75, 76, 85, 97, 139, 512];
+    let known_props: [u16; 9] = [11, 12, 13, 75, 76, 85, 97, 139, 512];
     if !known_props.contains(&prop_id) {
         let error_apdu = Apdu::Error(ErrorPdu {
             invoke_id,
@@ -231,11 +236,11 @@ async fn handle_read_property(
             expecting_reply: false,
             priority: NetworkPriority::NORMAL,
             source: Some(NpduAddress {
-                network: 1,
-                mac_address: bacnet_types::MacAddr::from_slice(&config.lan_mac),
+                network: config.local_network,
+                mac_address: bacnet_types::MacAddr::from_slice(&config.local_mac),
             }),
             destination: Some(NpduAddress {
-                network: 1,
+                network: config.local_network,
                 mac_address: msg
                     .source_network
                     .as_ref()
@@ -261,6 +266,9 @@ async fn handle_read_property(
     }
 
     let value_bytes = match prop_id {
+        11 => {
+            vec![0x22, 0x0B, 0xB8]
+        }
         // Bug 1: Object_Name — use fallback when device_name is empty
         75 => {
             let name = if config.device_name.is_empty() {
@@ -311,11 +319,11 @@ async fn handle_read_property(
         expecting_reply: false,
         priority: NetworkPriority::NORMAL,
         source: Some(NpduAddress {
-            network: 1,
-            mac_address: bacnet_types::MacAddr::from_slice(&config.lan_mac),
+            network: config.local_network,
+            mac_address: bacnet_types::MacAddr::from_slice(&config.local_mac),
         }),
         destination: Some(NpduAddress {
-            network: 1,
+            network: config.local_network,
             mac_address: msg
                 .source_network
                 .as_ref()
@@ -378,6 +386,58 @@ async fn handle_subscribe_cov(lan_transport: &mut impl TransportPort, msg: &Rece
         tracing::warn!("Failed to send SubscribeCOV response: {e}");
     } else {
         tracing::debug!("Sent SubscribeCOV SimpleAck (invoke_id={})", invoke_id);
+    }
+}
+
+async fn handle_write_property(
+    lan_transport: &mut impl TransportPort,
+    msg: &ReceivedApdu,
+    config: &LocalDeviceConfig,
+) {
+    let apdu_payload = &msg.apdu;
+    if apdu_payload.len() < 3 {
+        return;
+    }
+    let invoke_id = apdu_payload[2];
+
+    let error_apdu = Apdu::Error(ErrorPdu {
+        invoke_id,
+        service_choice: ConfirmedServiceChoice::WRITE_PROPERTY,
+        error_class: ErrorClass::PROPERTY,
+        error_code: ErrorCode::WRITE_ACCESS_DENIED,
+        error_data: Bytes::new(),
+    });
+
+    let mut apdu_buf = BytesMut::with_capacity(32);
+    if let Err(e) = encode_apdu(&mut apdu_buf, &error_apdu) {
+        tracing::warn!("Failed to encode WriteProperty error APDU: {e}");
+        return;
+    }
+
+    let npdu = Npdu {
+        is_network_message: false,
+        expecting_reply: false,
+        priority: NetworkPriority::NORMAL,
+        source: Some(NpduAddress {
+            network: config.local_network,
+            mac_address: bacnet_types::MacAddr::from_slice(&config.local_mac),
+        }),
+        destination: msg.source_network.clone(),
+        hop_count: 255,
+        payload: apdu_buf.freeze(),
+        ..Npdu::default()
+    };
+
+    let mut buf = BytesMut::with_capacity(32);
+    if let Err(e) = encode_npdu(&mut buf, &npdu) {
+        tracing::warn!("Failed to encode WriteProperty error NPDU: {e}");
+        return;
+    }
+
+    if let Err(e) = lan_transport.send_unicast(&buf, &[]).await {
+        tracing::warn!("Failed to send WriteProperty error response: {e}");
+    } else {
+        tracing::debug!("Sent WriteProperty error (WRITE_ACCESS_DENIED) invoke_id={}", invoke_id);
     }
 }
 
