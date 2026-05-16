@@ -72,8 +72,7 @@ services:
         condition: service_healthy
       btl-server:
         condition: service_started
-    command: ["run", "--target", "site-router:47808", "--section", "9", "--format", "json"]
-
+    command: ["run", "--target", "172.20.0.3:47808", "--section", "9", "--format", "json"]
   btl-runner-routing:
     profiles: ["section-10"]
     build:
@@ -86,7 +85,7 @@ services:
         condition: service_healthy
       btl-server:
         condition: service_started
-    command: ["run", "--target", "site-router:47808", "--section", "10", "--format", "json"]
+    command: ["run", "--target", "172.20.0.3:47808", "--section", "10", "--format", "json"]
 
 networks:
   default:

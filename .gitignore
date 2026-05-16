@@ -21,6 +21,12 @@ build/
 # opencode
 opencode.json
 
+# Secrets & keys
+*.pem
+*.key
+.env
+credentials.*
+
 # OS
 .DS_Store
 Thumbs.db

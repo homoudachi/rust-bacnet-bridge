@@ -6,7 +6,6 @@ use bacnet_transport::any::AnyTransport;
 use bacnet_transport::bbmd::BbmdState;
 use bacnet_transport::bip::BipTransport;
 use bacnet_transport::loopback::LoopbackTransport;
-use bacnet_transport::port::TransportPort;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing;
@@ -39,18 +38,31 @@ fn broadcast_from_ip(ip: Ipv4Addr) -> Ipv4Addr {
     }
 }
 
+fn encode_bip_mac(ip: Ipv4Addr, port: u16) -> Vec<u8> {
+    let octets = ip.octets();
+    let port_bytes = port.to_be_bytes();
+    vec![
+        octets[0],
+        octets[1],
+        octets[2],
+        octets[3],
+        port_bytes[0],
+        port_bytes[1],
+    ]
+}
+
 pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, BridgeError> {
     let lan_ip = parse_lan_ip(&config.router.lan.interface);
     let lan_port = config.router.lan.port;
     let broadcast_addr = broadcast_from_ip(lan_ip);
 
-    let lan_bip = BipTransport::new(lan_ip, lan_port, broadcast_addr);
+    let lan_bip = BipTransport::new(Ipv4Addr::UNSPECIFIED, lan_port, broadcast_addr);
     let (remote, bbmd_state) = build_remote_transport(config).await?;
 
     let (local_loop_router, local_loop_device) =
         LoopbackTransport::pair(vec![0x01, 0x01], vec![0x01, 0x02]);
 
-    let lan_mac = lan_bip.local_mac().to_vec();
+    let lan_mac = encode_bip_mac(lan_ip, lan_port);
 
     let ports = vec![
         RouterPort {

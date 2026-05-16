@@ -57,7 +57,7 @@ services:
       - BACNET_DEVICE_ID=1001
       - BACNET_DEVICE_NAME=Test-Device-01
       - BACNET_DEVICE_PORT=47808
-      - BACNET_DEVICE_BIND=172.20.0.4
+      - BACNET_DEVICE_BIND=0.0.0.0
       - BACNET_DEVICE_BROADCAST=172.20.0.255
       - RUST_LOG=info
     command: ["lan_device_sim"]
@@ -75,7 +75,7 @@ services:
       - lan-device-1
     environment:
       - BACNET_DEVICE_PORT=47809
-      - BACNET_DEVICE_BIND=172.20.0.5
+      - BACNET_DEVICE_BIND=0.0.0.0
       - BACNET_DEVICE_BROADCAST=172.20.0.255
       - BACNET_TEST_TARGET=unicast
       - BACNET_TEST_TARGET_IP=172.20.0.3
