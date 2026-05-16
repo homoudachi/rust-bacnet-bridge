@@ -2,26 +2,30 @@
 
 Dual-transport BACnet router bridging local BACnet/IP LAN to remote BACnet networks via BACnet/SC (primary) or Tailscale BBMD (fallback).
 
-**Status:** Pre-implementation. See [docs/ROADMAP.md](docs/ROADMAP.md) for the plan.
+**Status:** ~99% complete, Phase 6 polish. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Architecture (planned)
+## Architecture
 
 - Single binary `bacnet-bridge` with subcommands: `router`, `hub`, `serve`
 - Core routing via [rusty-bacnet](https://github.com/jscott3201/rusty-bacnet) `BACnetRouter` with two ports (LAN + remote transport)
-- Web dashboard: axum + HTMX + Tailwind CSS
-- Windows system tray: `tray-item` crate
-- BTL compliance target: ~253 router-relevant tests from [rusty-bacnet-btl-harness](https://github.com/jscott3201/rusty-bacnet-btl-harness)
+- Web dashboard: axum + HTMX + Tailwind CSS (embedded assets via rust-embed)
+- Windows system tray: `tray-item` crate with green/amber/red DIB icons
+- Config: TOML load/save, env-var overrides (`BACNET_BRIDGE__*`), auto-generation on first run
+- Embedded Hub mode: `--with-hub` runs SC Hub + Router simultaneously
+- 83 tests (unit + integration): config, FDT, routing, SC, BBMD, transport switch, dashboard API
 
-## Spike
-
-`examples/spike-two-port-router/` proves the core routing pattern works:
+## Quick start
 
 ```bash
-cd examples/spike-two-port-router
-cargo run
-```
+# Run the router (auto-generates config on first launch)
+cargo run -- router
 
-Validates Who-Is/I-Am broadcast cross-forwarding and ReadProperty unicast routing between two loopback transports.
+# Run with embedded SC Hub
+cargo run -- router --with-hub
+
+# Docker e2e test topologies (SC, BBMD, BTL harness)
+cd docker && docker compose -f compose-sc.yml up
+```
 
 ## Docs
 
@@ -44,4 +48,4 @@ Precise terms defined in [CONTEXT.md](CONTEXT.md):
 
 ## License
 
-Proprietary.
+MIT

@@ -2,7 +2,7 @@
 
 ## Current state
 
-~99% complete. All five implementation phases built; Phase 6 (polish) is complete.
+~99% complete. Phase 6 (polish) closing out with BTL/BBMD hardening.
 
 **Built and working:**
 - Workspace: root `Cargo.toml` with `crates/bridge-core` + `src/` binary
@@ -56,7 +56,7 @@ CONTEXT.md defines precise terminology. Use these terms, not casual synonyms:
 
 ## Source of truth
 
-`docs/FSD.md` is the authoritative plan. ADRs in `docs/adr/` explain key decisions. `docs/ROADMAP.md` tracks implementation progress.
+`docs/FSD.md` is the authoritative plan. ADRs in `docs/adr/` explain key decisions. `docs/ROADMAP.md` tracks implementation progress. License: MIT (`LICENSE`).
 
 ## Key constraints
 
@@ -71,3 +71,9 @@ Standard five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, 
 ### Domain docs
 
 Single-context repo: `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+
+### rusty-bacnet BIP broadcast bug
+`rusty-bacnet#22`: BIP broadcast receive broken when binding to specific IP. Workaround in bridge-core. Permanent fix in `rusty-bacnet` PR#21.
+
+### BTL harness dependency
+External: `jscott3201/rusty-bacnet-btl-harness`. `--target` only accepts bare IPv4, not hostnames.

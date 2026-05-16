@@ -99,6 +99,25 @@
 - [x] Docker BTL healthcheck port fix (8080 → 28821) (#43)
 - [x] favicon.ico asset created
 
+## 2026-05-16 hardening
+
+- [x] BTL harness compose: fixed hostname→IP resolution (site-router → 172.20.0.3)
+- [x] BBMD E2E: compute BIP MAC from IP+port (not local_mac() before start), bind to INADDR_ANY (workaround rusty-bacnet#22)
+- [x] .gitignore hardened (secrets patterns)
+- [x] MIT LICENSE added
+- [x] Legacy Python prototype expunged from git history
+
+### Notes
+
+- **BTL harness (item 32):** The `docker-compose.btl.yml` had a hostname resolution bug — `site-router` hostname was not resolvable from the BTL container. Fixed by using static IP `172.20.0.3` instead.
+
+- **rusty-bacnet#22:** BBMD transport requires `BipTransport::bind()` to `[0; 4]` (INADDR_ANY) before `enable_bbmd()`, and the BIP MAC address must be derived from the local IP+port combination rather than calling `local_mac()` pre-start. A PR (#21) is pending upstream.
+
+### Known dependencies
+
+- **rusty-bacnet#22** (PR#21 pending): BBMD transport workaround described above. Blocks removal of the INADDR_ANY bind and MAC computation workaround.
+- **BTL harness hostname limitation:** Docker compose networking does not resolve service hostnames from the BTL container in the current topology. Requires static IP assignment or extra networks configuration.
+
 ## Next steps (future)
 
 ### Docker E2E testing plan
