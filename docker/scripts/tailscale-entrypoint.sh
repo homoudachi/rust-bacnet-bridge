@@ -32,8 +32,12 @@ if [ -z "$IP" ]; then
 fi
 
 echo "Tailscale IP: $IP"
-export BACNET_BRIDGE_ROUTER__TAILSCALE__INTERFACE="${IP}"
-export BACNET_BRIDGE_ROUTER__LAN__INTERFACE="${IP}"
+
+# In userspace-networking mode, Tailscale IPs are virtual and not bound to a real
+# local interface. BIP transport must bind to 0.0.0.0 to receive traffic proxied
+# by Tailscale. Setting to the specific Tailscale IP causes EADDRNOTAVAIL.
+export BACNET_BRIDGE_ROUTER__TAILSCALE__INTERFACE="0.0.0.0"
+export BACNET_BRIDGE_ROUTER__LAN__INTERFACE="0.0.0.0"
 
 echo "Starting: $*"
 "$@" &

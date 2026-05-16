@@ -91,8 +91,10 @@ services:
       - /bin/sh
       - -c
       - |
-        for i in $(seq 1 30); do
-          IP=$$(tailscale ip -4 bacnet-laptop-router 2>/dev/null || tailscale status | grep bacnet-laptop-router | awk '{print $$1}')
+        for i in $$(seq 1 30); do
+          IP=$$(tailscale status 2>/dev/null | awk '/bacnet-laptop-router/ {print $$1}')
+          [ -n "$$IP" ] && break
+          IP=$$(tailscale ip -4 bacnet-laptop-router 2>/dev/null || true)
           [ -n "$$IP" ] && break
           sleep 2
         done
