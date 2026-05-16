@@ -1,0 +1,116 @@
+# Real Tailscale topology (FSD §11.3.3)
+#
+# Topology:
+#   icomm-sim (FD) ──Tailscale── laptop-router ──Tailscale── site-router ──Tailscale── lan-device-1
+#
+# All containers join a shared Tailscale tailnet via auth key and communicate
+# over Tailscale's WireGuard mesh. No Docker bridge IPs or static IPs required.
+
+services:
+  site-router:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tailscale
+    environment:
+      - TAILSCALE_HOSTNAME=bacnet-site-router
+      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}
+      - BACNET_BRIDGE_ROUTER__TRANSPORT=tailscale
+      - BACNET_BRIDGE_ROUTER__TAILSCALE__PORT=20000
+      - BACNET_BRIDGE_ROUTER__LAN__PORT=47808
+      - BACNET_BRIDGE_ROUTER__DEVICE_ID=100
+      - RUST_LOG=info
+    command: ["bacnet-bridge", "router"]
+    volumes:
+      - tailscale-site-state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+  laptop-router:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tailscale
+    depends_on:
+      - site-router
+    environment:
+      - TAILSCALE_HOSTNAME=bacnet-laptop-router
+      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}
+      - BACNET_BRIDGE_ROUTER__TRANSPORT=tailscale
+      - BACNET_BRIDGE_ROUTER__TAILSCALE__PORT=20001
+      - BACNET_BRIDGE_ROUTER__LAN__PORT=47809
+      - BACNET_BRIDGE_ROUTER__DEVICE_ID=200
+      - RUST_LOG=info
+    command: ["bacnet-bridge", "router"]
+    volumes:
+      - tailscale-laptop-state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+  lan-device-1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tailscale
+    depends_on:
+      - site-router
+    environment:
+      - TAILSCALE_HOSTNAME=bacnet-lan-device-1
+      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}
+      - BACNET_DEVICE_ID=1001
+      - BACNET_DEVICE_NAME=Test-Device-01
+      - BACNET_DEVICE_PORT=47808
+      - BACNET_DEVICE_BIND=0.0.0.0
+      - BACNET_DEVICE_BROADCAST=255.255.255.255
+      - RUST_LOG=info
+    command: ["lan_device_sim"]
+    volumes:
+      - tailscale-lan-device-state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+  icomm-simulator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tailscale
+    depends_on:
+      - site-router
+      - laptop-router
+      - lan-device-1
+    environment:
+      - TAILSCALE_HOSTNAME=bacnet-icomm-sim
+      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}
+      - BACNET_DEVICE_PORT=47809
+      - BACNET_DEVICE_BIND=0.0.0.0
+      - BACNET_DEVICE_BROADCAST=255.255.255.255
+      - BACNET_TEST_TARGET=unicast
+      - BACNET_TEST_TARGET_PORT=47809
+      - BACNET_TEST_TIMEOUT=30
+      - RUST_LOG=info
+    command:
+      - /bin/sh
+      - -c
+      - |
+        for i in $(seq 1 30); do
+          IP=$$(tailscale ip -4 bacnet-laptop-router 2>/dev/null || tailscale status | grep bacnet-laptop-router | awk '{print $$1}')
+          [ -n "$$IP" ] && break
+          sleep 2
+        done
+        if [ -z "$$IP" ]; then
+          echo "ERROR: Could not resolve bacnet-laptop-router Tailscale IP" >&2
+          exit 1
+        fi
+        echo "Resolved laptop-router Tailscale IP: $$IP"
+        export BACNET_TEST_TARGET_IP="$$IP"
+        exec icomm_sim
+    volumes:
+      - tailscale-icomm-state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+volumes:
+  tailscale-site-state:
+  tailscale-laptop-state:
+  tailscale-lan-device-state:
+  tailscale-icomm-state:

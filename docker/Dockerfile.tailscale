@@ -1,0 +1,25 @@
+FROM rust:1.93-alpine AS builder
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY src/ src/
+COPY examples/ examples/
+RUN cargo build --release --no-default-features --features router,hub --bin bacnet-bridge && \
+    cargo build --release --no-default-features --features router --examples
+
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates wget && \
+    wget -q https://pkgs.tailscale.com/stable/alpine/tailscale-keyring.apk && \
+    apk add --allow-untrusted tailscale-keyring.apk && \
+    wget -q https://pkgs.tailscale.com/stable/alpine/tailscale-latest.apk && \
+    apk add --allow-untrusted tailscale-latest.apk && \
+    rm -f tailscale-*.apk
+COPY --from=builder /app/target/release/bacnet-bridge /usr/local/bin/
+COPY --from=builder /app/target/release/examples/lan_device_sim /usr/local/bin/
+COPY --from=builder /app/target/release/examples/icomm_sim /usr/local/bin/
+RUN mkdir -p /var/lib/tailscale
+COPY docker/scripts/tailscale-entrypoint.sh /usr/local/bin/tailscale-entrypoint.sh
+RUN chmod +x /usr/local/bin/tailscale-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/tailscale-entrypoint.sh"]
+CMD ["bacnet-bridge", "router"]

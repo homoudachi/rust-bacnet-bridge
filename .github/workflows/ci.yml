@@ -89,6 +89,22 @@ jobs:
         if: failure()
         run: docker compose -f docker/docker-compose.bbmd.yml logs
 
+  docker-e2e-tailscale:
+    name: Docker E2E (Tailscale)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and run Tailscale topology
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+        run: |
+          docker compose -f docker/docker-compose.tailscale.yml build
+          docker compose -f docker/docker-compose.tailscale.yml up --abort-on-container-exit --exit-code-from icomm-simulator
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose -f docker/docker-compose.tailscale.yml logs
+
   btl-tests:
     name: BTL Compliance Tests
     runs-on: ubuntu-latest
