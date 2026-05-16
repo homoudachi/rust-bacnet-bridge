@@ -60,6 +60,33 @@ CONTEXT.md defines precise terminology. Use these terms, not casual synonyms:
 
 `docs/FSD.md` is the authoritative plan. ADRs in `docs/adr/` explain key decisions. `docs/ROADMAP.md` tracks implementation progress. License: MIT (`LICENSE`).
 
+## Development workflow
+
+### Fast BTL testing (no Docker rebuild)
+
+For rapid iteration on encoding/routing changes, use the fast-deploy workflow to avoid ~5 min Docker rebuilds (~30s feedback loop):
+
+```bash
+# Ensure BTL topology is running
+docker compose -f docker/docker-compose.btl-sc.yml up --profile section-9 -d
+
+# Build locally and hot-reload into container (musl target for Alpine compat)
+./docker/scripts/fast-deploy.sh
+
+# Full cycle: build + deploy + run BTL tests
+./docker/scripts/fast-btl.sh --section 9
+./docker/scripts/fast-btl.sh --section 10
+```
+
+Prerequisites:
+- Rust musl target: `rustup target add x86_64-unknown-linux-musl`
+- musl tools (Debian): `sudo apt-get install musl-tools`
+
+The binary is built with `x86_64-unknown-linux-musl` for Alpine compatibility inside the Docker container. A full `docker compose build site-router` is only needed for:
+- Dependency changes (Cargo.toml / Cargo.lock updates)
+- Changes to the Dockerfile itself
+- Final CI verification before push
+
 ## Key constraints
 
 ### Issue tracker
