@@ -108,6 +108,9 @@
 - [x] Legacy Python prototype expunged from git history
 - [x] BTL Section 9 (DLL): 494/494 tests passing (#63)
 - [x] BTL Section 10 (Routing): 15/15 tests passing (#63)
+- [x] BTL Section 2 (Compliance): 16/19 passing (3 failures deferred to issues)
+- [x] BTL Section 3 (Objects): 826/834 passing (8 failures deferred to issues)
+- [x] BTL Section 0 (Smoke): 3/3 passing
 - [x] ReadProperty ACK encoding fix: context tag [2]→[3], service dispatch apdu[1]→apdu[3] (#59, #63)
 - [x] NPDU routing fix: use BIP MAC instead of loopback MAC, explicit destination network (#63)
 - [x] BBMD LAN enable: `enable_bbmd(vec![])` on LAN transport for foreign device registration (#63)
