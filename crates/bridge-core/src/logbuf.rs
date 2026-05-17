@@ -90,7 +90,27 @@ impl io::Write for LogBufWriter {
     }
 }
 
+fn strip_ansi(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+            i += 2;
+            while i < bytes.len() && !(bytes[i] as char).is_ascii_alphabetic() {
+                i += 1;
+            }
+            if i < bytes.len() { i += 1; }
+        } else {
+            result.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    result
+}
+
 fn parse_tracing_line(line: &str) -> LogEntry {
+    let line = strip_ansi(line);
     let mut parts = line.splitn(2, ' ');
     let timestamp = parts.next().unwrap_or("").to_string();
     let rest = parts.next().unwrap_or("");
@@ -174,6 +194,24 @@ mod tests {
         for e in &warn_up {
             assert!(e.level == "WARN" || e.level == "ERROR");
         }
+    }
+
+    #[test]
+    fn test_strip_ansi() {
+        let input = "\x1b[2m2025-01-01T00:00:00Z\x1b[0m \x1b[31mERROR\x1b[0m \x1b[1mmy_target\x1b[0m: \x1b[36msomething happened\x1b[0m";
+        let entry = parse_tracing_line(input);
+        assert!(!entry.timestamp.contains('\x1b'));
+        assert_eq!(entry.level, "ERROR");
+        assert!(!entry.target.contains('\x1b'));
+        assert!(!entry.message.contains('\x1b'));
+        assert_eq!(entry.message, "something happened");
+    }
+
+    #[test]
+    fn test_strip_ansi_empty() {
+        assert_eq!(strip_ansi(""), "");
+        assert_eq!(strip_ansi("plain text"), "plain text");
+        assert_eq!(strip_ansi("\x1b[1m\x1b[0m"), "");
     }
 
     #[test]
