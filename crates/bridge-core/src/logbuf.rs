@@ -1,11 +1,15 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use std::io;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 
+static NEXT_LOG_ID: AtomicU64 = AtomicU64::new(0);
+
 #[derive(Debug, Clone, Serialize)]
 pub struct LogEntry {
+    pub id: u64,
     pub timestamp: String,
     pub level: String,
     pub target: String,
@@ -38,7 +42,8 @@ impl LogRingBuffer {
         }
     }
 
-    pub fn push(&self, entry: LogEntry) {
+    pub fn push(&self, mut entry: LogEntry) {
+        entry.id = NEXT_LOG_ID.fetch_add(1, Ordering::Relaxed);
         let mut entries = self.entries.lock().unwrap();
         if entries.len() >= self.capacity {
             entries.remove(0);
@@ -52,6 +57,20 @@ impl LogRingBuffer {
         let filtered: Vec<_> = entries
             .iter()
             .filter(|e| level_value(&e.level) >= min_val)
+            .cloned()
+            .collect();
+        let len = filtered.len();
+        let start = len.saturating_sub(limit);
+        filtered.into_iter().skip(start).collect()
+    }
+
+    /// Returns entries with id > since_id, up to limit, optionally filtered by min_level.
+    pub fn recent_since(&self, since_id: u64, limit: usize, min_level: Option<&str>) -> Vec<LogEntry> {
+        let entries = self.entries.lock().unwrap();
+        let min_val = min_level.map(level_value).unwrap_or(0);
+        let filtered: Vec<_> = entries
+            .iter()
+            .filter(|e| e.id > since_id && level_value(&e.level) >= min_val)
             .cloned()
             .collect();
         let len = filtered.len();
@@ -130,6 +149,7 @@ fn parse_tracing_line(line: &str) -> LogEntry {
     };
 
     LogEntry {
+        id: 0,
         timestamp,
         level,
         target,
@@ -144,6 +164,7 @@ mod tests {
 
     fn entry(level: &str) -> LogEntry {
         LogEntry {
+            id: 0,
             timestamp: "2025-01-01T00:00:00Z".into(),
             level: level.into(),
             target: "test".into(),
@@ -222,5 +243,23 @@ mod tests {
         assert_eq!(super::level_value("WARN"), 3);
         assert_eq!(super::level_value("ERROR"), 4);
         assert_eq!(super::level_value("UNKNOWN"), 5);
+    }
+
+    #[test]
+    fn test_recent_since() {
+        let buf = LogRingBuffer::new(100);
+        buf.push(entry("INFO"));
+        buf.push(entry("INFO"));
+        buf.push(entry("WARN"));
+        let all = buf.recent(10, None);
+        assert_eq!(all.len(), 3);
+        // recent_since with last item's id should return only newer entries
+        let since_last = buf.recent_since(all[2].id, 10, None);
+        assert_eq!(since_last.len(), 0);
+        // recent_since with first item's id should return last 2
+        let since_first = buf.recent_since(all[0].id, 10, None);
+        assert_eq!(since_first.len(), 2);
+        assert_eq!(since_first[0].id, all[1].id);
+        assert_eq!(since_first[1].id, all[2].id);
     }
 }

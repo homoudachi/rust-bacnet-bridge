@@ -416,13 +416,31 @@ pub async fn ws_logs(State(state): State<WebAppState>, ws: WebSocketUpgrade) -> 
     let logbuf = state.inner.logbuf.clone();
     ws.on_upgrade(move |mut ws: WebSocket| async move {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
+        let mut last_sent_id: u64 = 0;
+        // Send initial batch on connect
+        {
+            let entries = logbuf.recent_since(0, 50, None);
+            if !entries.is_empty() {
+                if let Some(e) = entries.last() {
+                    last_sent_id = e.id;
+                }
+                if let Ok(text) = serde_json::to_string(&entries) {
+                    let _ = ws.send(Message::Text(text.into())).await;
+                }
+            }
+        }
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    let entries = logbuf.recent(50, None);
-                    if let Ok(text) = serde_json::to_string(&entries) {
-                        if ws.send(Message::Text(text.into())).await.is_err() {
-                            break;
+                    let entries = logbuf.recent_since(last_sent_id, 50, None);
+                    if !entries.is_empty() {
+                        if let Some(e) = entries.last() {
+                            last_sent_id = e.id;
+                        }
+                        if let Ok(text) = serde_json::to_string(&entries) {
+                            if ws.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }

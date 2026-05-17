@@ -278,6 +278,7 @@ fn test_fdt_remove_entry() {
 
 fn make_log_entry(level: &str, msg: &str) -> LogEntry {
     LogEntry {
+        id: 0,
         timestamp: "2025-01-01T00:00:00Z".into(),
         level: level.into(),
         target: "dashboard_api_test".into(),
