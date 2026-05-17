@@ -325,7 +325,7 @@ function renderConfigForm(config) {
                 let opts = options.map(o =>
                     `<option value="${o.value}" ${val === o.value ? 'selected' : ''}>${o.label}</option>`
                 ).join('');
-                if (val && !options.some(o => o.value === val)) {
+                if (val != null && val !== '' && !options.some(o => o.value === val)) {
                     opts = `<option value="${val}" selected>${val}</option>` + opts;
                 }
                 const isTransportSelect = field.key === 'router.transport';
@@ -498,6 +498,7 @@ let logPaused = false;
 let logBuffer = [];
 let autoScroll = true;
 let wsConnected = false;
+let renderedIds = new Set();
 
 function setupWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -573,8 +574,10 @@ function clearLogs() {
     logEntries = [];
     logBuffer = [];
     logPaused = false;
+    renderedIds = new Set();
     document.getElementById('btn-pause').textContent = 'Pause';
-    renderLogs();
+    document.getElementById('log-viewer').innerHTML = '';
+    document.getElementById('log-viewer').innerHTML = '<div class="text-gray-500">No log entries match filters</div>';
 }
 
 function toggleAutoScroll() {
@@ -599,28 +602,62 @@ function renderLogs() {
     const last50 = filtered.slice(-50);
 
     if (last50.length === 0) {
-        viewer.innerHTML = '<div class="text-gray-500">No log entries match filters</div>';
+        if (viewer.children.length !== 1 || !viewer.firstChild.textContent.includes('No log entries')) {
+            viewer.innerHTML = '<div class="text-gray-500">No log entries match filters</div>';
+            renderedIds = new Set();
+        }
         return;
     }
 
-    viewer.innerHTML = last50.map(e => {
-        const colorClass = e.level === 'ERROR' ? 'text-red-400' :
-                           e.level === 'WARN' ? 'text-yellow-400' :
-                           e.level === 'INFO' ? 'text-gray-100' :
-                           'text-gray-400';
-        const ts = escapeHtml(e.timestamp || '');
-        const level = escapeHtml(e.level || '');
-        const target = searchText ? highlightText(e.target || '', searchText) : escapeHtml(e.target || '');
-        const message = searchText ? highlightText(e.message || '', searchText) : escapeHtml(e.message || '');
-        return `<div class="${colorClass}">[${ts}] [${level}] [${target}] ${message}</div>`;
-    }).join('');
+    const newIds = new Set(last50.map(e => e.id));
 
-    if (autoScroll) {
-        viewer.scrollTop = viewer.scrollHeight;
+    if (newIds.size !== renderedIds.size || ![...newIds].every(id => renderedIds.has(id))) {
+        // Remove placeholder if present
+        const placeholder = viewer.querySelector('.text-gray-500');
+        if (placeholder) placeholder.remove();
+
+        const children = viewer.querySelectorAll('[data-log-id]');
+        children.forEach(child => {
+            const id = parseInt(child.dataset.logId);
+            if (!newIds.has(id)) {
+                child.remove();
+            }
+        });
+
+        const existingIds = new Set([...viewer.querySelectorAll('[data-log-id]')].map(c => parseInt(c.dataset.logId)));
+        const toAdd = last50.filter(e => !existingIds.has(e.id));
+
+        if (toAdd.length > 0) {
+            const html = toAdd.map(e => {
+                const colorClass = e.level === 'ERROR' ? 'text-red-400' :
+                                   e.level === 'WARN' ? 'text-yellow-400' :
+                                   e.level === 'INFO' ? 'text-gray-100' :
+                                   'text-gray-400';
+                const ts = escapeHtml(e.timestamp || '');
+                const level = escapeHtml(e.level || '');
+                const target = searchText ? highlightText(e.target || '', searchText) : escapeHtml(e.target || '');
+                const message = searchText ? highlightText(e.message || '', searchText) : escapeHtml(e.message || '');
+                return `<div class="${colorClass}" data-log-id="${e.id}">[${ts}] [${level}] [${target}] ${message}</div>`;
+            }).join('');
+            viewer.insertAdjacentHTML('beforeend', html);
+        }
+
+        const MAX_VISIBLE = 100;
+        const logDivs = viewer.querySelectorAll('[data-log-id]');
+        while (logDivs.length > MAX_VISIBLE) {
+            logDivs[0].remove();
+        }
+
+        renderedIds = newIds;
+
+        if (autoScroll) {
+            viewer.scrollTop = viewer.scrollHeight;
+        }
     }
 }
 
 function filterLogs() {
+    renderedIds = new Set();
     renderLogs();
 }
 
@@ -643,12 +680,22 @@ async function downloadLogs() {
 }
 
 function copyLogs() {
-    const viewer = document.getElementById('log-viewer');
-    const text = viewer.textContent || '';
-    if (!text.trim()) {
+    const levelFilter = document.getElementById('log-level-filter').value;
+    const searchText = document.getElementById('log-search').value.toLowerCase();
+    const levelOrder = { 'TRACE': 0, 'DEBUG': 1, 'INFO': 2, 'WARN': 3, 'ERROR': 4 };
+    const minLevel = levelFilter ? (levelOrder[levelFilter] || 0) : 0;
+
+    const filtered = logEntries.filter(e => {
+        const lv = levelOrder[e.level] !== undefined ? levelOrder[e.level] : 0;
+        return lv >= minLevel && (!searchText || e.message.toLowerCase().includes(searchText) || e.target.toLowerCase().includes(searchText));
+    });
+
+    if (filtered.length === 0) {
         showToast('No log content to copy', 'error');
         return;
     }
+
+    const text = filtered.map(e => `[${e.timestamp}] [${e.level}] [${e.target}] ${e.message}`).join('\n');
     navigator.clipboard.writeText(text).then(() => {
         showToast('Log copied to clipboard', 'success');
     }).catch(() => {
