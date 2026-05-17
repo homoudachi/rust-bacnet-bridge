@@ -14,8 +14,6 @@ use cli::{Cli, Command};
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
-
     let cli = Cli::parse();
 
     match cli.command.unwrap_or(Command::Router {

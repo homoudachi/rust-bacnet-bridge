@@ -15,6 +15,7 @@ use bacnet_transport::sc_frame::Vmac;
 use bacnet_transport::sc_hub::ScHub;
 
 pub async fn run_hub(config: &HubConfig) -> Result<(), BridgeError> {
+    tracing_subscriber::fmt::init();
     let hub_vmac: Vmac = rand::random();
     let tls_config = build_tls_config(config).await?;
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));

@@ -7,10 +7,12 @@ use bacnet_transport::bbmd::BbmdState;
 use bacnet_transport::sc_frame::Vmac;
 use bacnet_transport::sc_hub::ScHub;
 use bridge_core::{
-    start_router, AppState, BridgeConfig, FdtManager, LogRingBuffer, RunningRouter, StateManager,
+    start_router, AppState, BridgeConfig, FdtManager, LogBufWriter, LogRingBuffer, RunningRouter,
+    StateManager,
 };
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
+use tracing_subscriber::prelude::*;
 
 use crate::hub_cmd;
 use crate::web;
@@ -43,6 +45,21 @@ pub async fn run_router(
     let config = Arc::new(RwLock::new(config));
     let state = StateManager::new();
     state.try_transition(AppState::Stopped)?;
+
+    let logbuf = Arc::new(LogRingBuffer::new(1000));
+
+    {
+        let logbuf_for_writer = logbuf.clone();
+        let subscriber = tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(move || LogBufWriter::new(logbuf_for_writer.clone()))
+                    .with_target(true)
+                    .with_level(true),
+            );
+        tracing::subscriber::set_global_default(subscriber).ok();
+    }
 
     let is_embedded_hub = with_hub;
     let mut cloud_hub_url: Option<String> = None;
@@ -97,7 +114,6 @@ pub async fn run_router(
     let state_rx = state.subscribe();
 
     let fdt = Arc::new(Mutex::new(FdtManager::new()));
-    let logbuf = Arc::new(LogRingBuffer::new(1000));
 
     let bbmd_handle: Arc<RwLock<Option<Arc<Mutex<BbmdState>>>>> = Arc::new(RwLock::new(
         running.as_ref().and_then(|r| r.bbmd_state.clone()),

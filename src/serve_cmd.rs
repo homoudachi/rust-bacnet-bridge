@@ -12,6 +12,7 @@ pub async fn run_serve(
     config_path: Option<String>,
     dev: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
     let path = config_path
         .map(PathBuf::from)
         .unwrap_or_else(BridgeConfig::default_config_path);

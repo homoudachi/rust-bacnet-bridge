@@ -1,5 +1,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
+use std::io;
+use std::sync::Arc;
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,6 +57,64 @@ impl LogRingBuffer {
         let len = filtered.len();
         let start = len.saturating_sub(limit);
         filtered.into_iter().skip(start).collect()
+    }
+}
+
+/// A tracing-compatible writer that pushes formatted log lines into a LogRingBuffer.
+pub struct LogBufWriter {
+    buf: Arc<LogRingBuffer>,
+}
+
+impl LogBufWriter {
+    pub fn new(buf: Arc<LogRingBuffer>) -> Self {
+        Self { buf }
+    }
+}
+
+impl io::Write for LogBufWriter {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        let text = String::from_utf8_lossy(data);
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let entry = parse_tracing_line(line);
+            self.buf.push(entry);
+        }
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+fn parse_tracing_line(line: &str) -> LogEntry {
+    let mut parts = line.splitn(2, ' ');
+    let timestamp = parts.next().unwrap_or("").to_string();
+    let rest = parts.next().unwrap_or("");
+
+    let rest = rest.trim_start();
+    let mut parts = rest.splitn(2, ' ');
+    let level = parts.next().unwrap_or("INFO").to_string();
+    let target_msg = parts.next().unwrap_or("");
+
+    let (target, message) = if let Some(pos) = target_msg.find(": ") {
+        (
+            target_msg[..pos].to_string(),
+            target_msg[pos + 2..].to_string(),
+        )
+    } else {
+        (String::new(), target_msg.to_string())
+    };
+
+    LogEntry {
+        timestamp,
+        level,
+        target,
+        message,
+        fields: HashMap::new(),
     }
 }
 

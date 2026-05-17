@@ -290,22 +290,27 @@ pub async fn transport_start(
 
 pub async fn update_config(
     State(state): State<WebAppState>,
-    Json(body): Json<BridgeConfig>,
+    Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    {
-        let mut cfg = state.inner.config.write().await;
-        *cfg = body;
-        if let Some(path) = &state.inner.config_path {
-            if let Err(e) = cfg.save(std::path::Path::new(path)) {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": format!("Failed to save config: {}", e) })),
-                );
+    match serde_json::from_value::<BridgeConfig>(body) {
+        Ok(new_config) => {
+            let mut cfg = state.inner.config.write().await;
+            *cfg = new_config;
+            if let Some(path) = &state.inner.config_path {
+                if let Err(e) = cfg.save(std::path::Path::new(path)) {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": format!("Failed to save config: {}", e) })),
+                    );
+                }
             }
+            (StatusCode::OK, Json(json!({ "status": "ok" })))
         }
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": format!("Invalid config: {}", e) })),
+        ),
     }
-
-    (StatusCode::OK, Json(json!({ "status": "ok" })))
 }
 
 pub async fn get_fdt(State(state): State<WebAppState>) -> impl IntoResponse {
