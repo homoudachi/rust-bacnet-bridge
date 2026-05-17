@@ -142,3 +142,26 @@ For a future phase:
 ### BTL ACME production mode
 
 The `--acme-production` flag on the `hub` subcommand toggles between Let's Encrypt staging and production. Staging is safe for CI/BTL testing; production requires a real public domain. No code changes needed — just set the flag when deploying a production Hub.
+
+## Phase 7: UI Testing Pass (in progress on `ui-testing-pass`)
+
+First real-world testing of the Windows EXE binary with system tray and web dashboard.
+
+### Completed
+- [x] Tray icon resource panic fixed (#85) — `IconSource::Resource("")` -> `IconSource::RawIcon`
+- [x] CI smoke test added (#86) — Windows EXE build + `/api/status` poll in CI
+
+### In progress
+- [ ] Manual UI testing on Windows (tray icons, dashboard, config panel, transport switch)
+- [ ] State-gated menu items verified (Start/Stop/Switch greyed correctly)
+- [ ] Dashboard HTMX polling (FDT, status bar, uptime)
+- [ ] WebSocket log streaming verified
+- [ ] Config persistence (TOML write on dashboard save, restart retains settings)
+- [ ] Transport switch cycle (SC <-> Tailscale) via dashboard + tray
+- [ ] Embedded Hub mode (`--with-hub`) dashboard toggle
+- [ ] serve mode (`--dev` flag, filesystem assets)
+
+### Testing guidance
+- See `docs/testing-windows-exe.md` for sandboxing strategy
+- Bind to `127.0.0.1` for dashboard-only testing (no real BACnet hardware needed)
+- Use VM or isolated machine for full LAN BACnet testing
