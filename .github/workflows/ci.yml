@@ -142,3 +142,43 @@ jobs:
         with:
           name: btl-results-section-${{ matrix.section }}
           path: btl-results-section-${{ matrix.section }}.log
+
+  smoke-test-windows:
+    name: Smoke Test (Windows EXE)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --release
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath "target\release\bacnet-bridge.exe" -ArgumentList "router" -PassThru -NoNewWindow
+          $maxRetries = 15
+          $success = $false
+          for ($i = 0; $i -lt $maxRetries; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+              $resp = Invoke-WebRequest -Uri "http://localhost:28821/api/status" -UseBasicParsing -TimeoutSec 3
+              if ($resp.StatusCode -eq 200) {
+                $body = $resp.Content | ConvertFrom-Json
+                if ($body.state) {
+                  Write-Host "SUCCESS: /api/status returned state=$($body.state)"
+                  $success = $true
+                  break
+                }
+              }
+            } catch {
+              Write-Host "Attempt $($i+1)/$maxRetries: not ready yet ($_)"
+            }
+          }
+          if (-not $success) {
+            Write-Error "FAILED: could not reach /api/status after $maxRetries attempts"
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 1
+          Write-Host "Smoke test passed"
