@@ -16,7 +16,12 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    match cli.command {
+    match cli.command.unwrap_or(Command::Router {
+        config: None,
+        transport: None,
+        with_hub: false,
+        log_level: "info".to_string(),
+    }) {
         Command::Router {
             config,
             transport,

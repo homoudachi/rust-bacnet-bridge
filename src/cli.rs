@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 #[command(name = "bacnet-bridge", version)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 }
 
 #[derive(Subcommand)]
