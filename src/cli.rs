@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "bacnet-bridge")]
+#[command(name = "bacnet-bridge", version)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,

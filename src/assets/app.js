@@ -46,19 +46,25 @@ function updateTransportButtons(state, transport) {
     const btnStop = document.getElementById('btn-stop');
     const btnStart = document.getElementById('btn-start');
 
+    const cfgBtnStart = document.getElementById('cfg-btn-start');
+    const cfgBtnStop = document.getElementById('cfg-btn-stop');
+    const cfgSwitchRow = document.getElementById('cfg-switch-row');
+    const cfgBtnSwitchSc = document.getElementById('cfg-btn-switch-sc');
+    const cfgBtnSwitchTs = document.getElementById('cfg-btn-switch-tailscale');
+
     const isRunning = state === 'Running';
     const isStopped = state === 'Stopped';
 
+    btnStart.disabled = !isStopped;
     btnStop.disabled = !isRunning;
-    btnStart.disabled = isRunning;
+    btnSc.disabled = !isRunning || transport === 'sc';
+    btnTs.disabled = !isRunning || transport === 'tailscale';
 
-    if (isStopped) {
-        btnSc.disabled = transport === 'sc';
-        btnTs.disabled = transport === 'tailscale';
-    } else {
-        btnSc.disabled = true;
-        btnTs.disabled = true;
-    }
+    cfgBtnStart.style.display = isStopped ? '' : 'none';
+    cfgBtnStop.style.display = isRunning ? '' : 'none';
+    cfgSwitchRow.style.display = isRunning ? '' : 'none';
+    cfgBtnSwitchSc.disabled = transport === 'sc';
+    cfgBtnSwitchTs.disabled = transport === 'tailscale';
 }
 
 async function updateStatus() {

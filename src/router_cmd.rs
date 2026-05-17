@@ -6,7 +6,9 @@ use std::time::Duration;
 use bacnet_transport::bbmd::BbmdState;
 use bacnet_transport::sc_frame::Vmac;
 use bacnet_transport::sc_hub::ScHub;
-use bridge_core::{start_router, AppState, BridgeConfig, FdtManager, LogRingBuffer, StateManager};
+use bridge_core::{
+    start_router, AppState, BridgeConfig, FdtManager, LogRingBuffer, RunningRouter, StateManager,
+};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
 
@@ -100,10 +102,22 @@ pub async fn run_router(
     }
 
     let cfg_guard = config.read().await;
-    let mut running = Some(start_router(&cfg_guard).await?);
+    let mut running: Option<RunningRouter> = match start_router(&cfg_guard).await {
+        Ok(r) => Some(r),
+        Err(e) => {
+            tracing::warn!(
+                "Initial router start failed: {}. Dashboard available for configuration.",
+                e
+            );
+            state.try_transition(AppState::Stopped).ok();
+            None
+        }
+    };
     drop(cfg_guard);
-    state.try_transition(AppState::Running)?;
-    tracing::info!("Router running");
+    if running.is_some() {
+        state.try_transition(AppState::Running)?;
+        tracing::info!("Router running");
+    }
 
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<web::RouterCommand>(32);
     let state_rx = state.subscribe();

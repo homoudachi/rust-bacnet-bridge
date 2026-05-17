@@ -227,6 +227,43 @@
             <div id="config-form" class="space-y-4">
                 <span class="skeleton skeleton-text block"></span>
             </div>
+            <div class="border-t border-gray-200 pt-4 mt-4 space-y-2">
+                <div class="flex gap-2">
+                    <button id="cfg-btn-start"
+                            class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                   border-green-200 text-green-700 bg-green-50 hover:bg-green-100
+                                   disabled:opacity-50 disabled:cursor-not-allowed"
+                            onclick="startRouter()"
+                            style="display:none">
+                        Start Router
+                    </button>
+                    <button id="cfg-btn-stop"
+                            class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                   border-red-200 text-red-700 bg-red-50 hover:bg-red-100
+                                   disabled:opacity-50 disabled:cursor-not-allowed"
+                            onclick="stopRouter()"
+                            style="display:none">
+                        Stop Router
+                    </button>
+                </div>
+                <div id="cfg-switch-row" class="flex gap-2" style="display:none">
+                    <span class="text-sm text-gray-500 self-center">Switch to:</span>
+                    <button id="cfg-btn-switch-sc"
+                            class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                   border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100
+                                   disabled:opacity-50 disabled:cursor-not-allowed"
+                            onclick="switchTransport('sc')">
+                        BACnet/SC
+                    </button>
+                    <button id="cfg-btn-switch-tailscale"
+                            class="flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
+                                   border-green-200 text-green-700 bg-green-50 hover:bg-green-100
+                                   disabled:opacity-50 disabled:cursor-not-allowed"
+                            onclick="switchTransport('tailscale')">
+                        Tailscale
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div id="toast" class="fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium
