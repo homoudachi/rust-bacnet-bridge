@@ -1,4 +1,5 @@
 let configData = null;
+let interfaceList = [];
 
 function showToast(msg, type) {
     const t = document.getElementById('toast');
@@ -176,6 +177,7 @@ async function loadInterfaces() {
         const resp = await fetch('/api/interfaces');
         if (!resp.ok) return;
         const data = await resp.json();
+        interfaceList = data.interfaces || [];
         const list = document.getElementById('interfaces-list');
         if (!data.interfaces || data.interfaces.length === 0) {
             list.innerHTML = '<p class="text-sm text-gray-400">No interfaces configured</p>';
@@ -205,16 +207,30 @@ async function loadInterfaces() {
                     `).join('')}
                 </tbody>
             </table>`;
+        if (configData) {
+            renderConfigForm(configData);
+        }
     } catch (e) {
         // silent
     }
 }
 
+async function refreshInterfaces() {
+    await loadInterfaces();
+}
+
 async function loadConfig() {
     try {
-        const resp = await fetch('/api/config');
-        if (!resp.ok) return;
-        configData = await resp.json();
+        const [configResp, ifaceResp] = await Promise.all([
+            fetch('/api/config'),
+            fetch('/api/interfaces'),
+        ]);
+        if (!configResp.ok) return;
+        configData = await configResp.json();
+        if (ifaceResp.ok) {
+            const data = await ifaceResp.json();
+            interfaceList = data.interfaces || [];
+        }
         renderConfigForm(configData);
     } catch (e) {
         // silent
@@ -246,7 +262,11 @@ function renderConfigForm(config) {
         {
             title: 'LAN (BACnet/IP)',
             fields: [
-                { key: 'router.lan.interface', label: 'Interface IP', type: 'text', placeholder: 'e.g., 192.168.1.100' },
+                { key: 'router.lan.interface', label: 'Interface IP', type: 'select',
+                    options: () => interfaceList
+                        .filter(i => !i.ip.startsWith('100.') && !i.ip.startsWith('127.') && i.ip.includes('.'))
+                        .map(i => ({ value: i.ip, label: `${i.name} (${i.ip})` })),
+                    placeholder: 'e.g., 192.168.1.100' },
                 { key: 'router.lan.port', label: 'Port', type: 'number' },
             ]
         },
@@ -262,7 +282,11 @@ function renderConfigForm(config) {
         {
             title: 'Tailscale',
             fields: [
-                { key: 'router.tailscale.interface', label: 'Interface IP', type: 'text', placeholder: 'e.g., 100.64.0.1' },
+                { key: 'router.tailscale.interface', label: 'Interface IP', type: 'select',
+                    options: () => interfaceList
+                        .filter(i => i.ip.startsWith('100.'))
+                        .map(i => ({ value: i.ip, label: `${i.name} (${i.ip})` })),
+                    placeholder: 'e.g., 100.64.0.1' },
                 { key: 'router.tailscale.port', label: 'Port', type: 'number' },
             ]
         },
@@ -297,11 +321,17 @@ function renderConfigForm(config) {
 
             let input;
             if (field.type === 'select') {
-                const opts = field.options.map(o =>
+                const options = typeof field.options === 'function' ? field.options() : field.options;
+                let opts = options.map(o =>
                     `<option value="${o.value}" ${val === o.value ? 'selected' : ''}>${o.label}</option>`
                 ).join('');
+                if (val && !options.some(o => o.value === val)) {
+                    opts = `<option value="${val}" selected>${val}</option>` + opts;
+                }
+                const isTransportSelect = field.key === 'router.transport';
+                const changeAttr = isTransportSelect ? 'onchange="onTransportChange(this)"' : '';
                 input = `<select id="cfg-${field.key.replace(/\./g, '-')}" data-key="${field.key}"
-                          onchange="onTransportChange(this)">${opts}</select>`;
+                          ${changeAttr}>${opts}</select>`;
             } else if (field.type === 'checkbox') {
                 input = `<input type="checkbox" id="cfg-${field.key.replace(/\./g, '-')}" data-key="${field.key}"
                           ${val ? 'checked' : ''}
@@ -610,6 +640,26 @@ async function downloadLogs() {
     } catch (e) {
         // silent
     }
+}
+
+function copyLogs() {
+    const viewer = document.getElementById('log-viewer');
+    const text = viewer.textContent || '';
+    if (!text.trim()) {
+        showToast('No log content to copy', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Log copied to clipboard', 'success');
+    }).catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('Log copied to clipboard', 'success');
+    });
 }
 
 async function updateRouterInfo() {

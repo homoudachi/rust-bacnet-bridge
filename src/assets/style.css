@@ -92,3 +92,8 @@ label {
     height: 0.75rem;
     width: 50%;
 }
+
+#log-viewer {
+    user-select: text;
+    -webkit-user-select: text;
+}

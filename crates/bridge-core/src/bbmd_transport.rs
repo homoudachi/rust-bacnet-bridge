@@ -39,7 +39,8 @@ fn convert_bdt_entry(entry: &BdtEntry) -> Result<BbmdBdtEntry, BridgeError> {
 pub async fn build_bbmd_transport(
     config: &TailscaleConfig,
 ) -> Result<(AnyTransport<NoSerial>, Option<Arc<Mutex<BbmdState>>>), BridgeError> {
-    let interface: Ipv4Addr = config.interface.parse().map_err(|e| {
+    let clean_ip = config.interface.split('/').next().unwrap_or(&config.interface);
+    let interface: Ipv4Addr = clean_ip.parse().map_err(|e| {
         BridgeError::Transport(format!(
             "Invalid Tailscale interface IP '{}': {e}",
             config.interface

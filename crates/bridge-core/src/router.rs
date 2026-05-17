@@ -25,10 +25,11 @@ pub struct RunningRouter {
 }
 
 fn parse_lan_ip(interface: &str) -> Ipv4Addr {
-    if interface.is_empty() {
+    let ip_str = interface.split('/').next().unwrap_or(interface);
+    if ip_str.is_empty() {
         Ipv4Addr::UNSPECIFIED
     } else {
-        interface.parse().unwrap_or(Ipv4Addr::UNSPECIFIED)
+        ip_str.parse().unwrap_or(Ipv4Addr::UNSPECIFIED)
     }
 }
 
