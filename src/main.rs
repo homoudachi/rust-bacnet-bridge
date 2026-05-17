@@ -3,6 +3,23 @@
 #[cfg(feature = "windows-tray")]
 mod tray;
 
+#[cfg(feature = "windows-tray")]
+use std::io::Write;
+
+#[cfg(feature = "windows-tray")]
+fn install_panic_hook() {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let msg = format!("PANIC: {info}\n");
+        // Write to a temp file so we can debug GUI-mode crashes
+        if let Ok(mut f) = std::fs::File::create("bacnet-bridge-panic.log") {
+            let _ = f.write_all(msg.as_bytes());
+            let _ = f.flush();
+        }
+        hook(info);
+    }));
+}
+
 mod cli;
 mod hub_cmd;
 mod router_cmd;
@@ -14,6 +31,9 @@ use cli::{Cli, Command};
 
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "windows-tray")]
+    install_panic_hook();
+
     let cli = Cli::parse();
 
     match cli.command.unwrap_or(Command::Router {

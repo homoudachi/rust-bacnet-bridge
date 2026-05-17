@@ -44,7 +44,7 @@ pub async fn run_router(
 
     let config = Arc::new(RwLock::new(config));
     let state = StateManager::new();
-    state.try_transition(AppState::Stopped)?;
+    // Initial state is Stopped — no transition needed
 
     let logbuf = Arc::new(LogRingBuffer::new(1000));
 
