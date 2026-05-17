@@ -151,7 +151,7 @@ pub async fn run_router(
     };
 
     #[cfg(feature = "windows-tray")]
-    let tray_url = format!("http://{}:{}", web_host, web_port);
+    let tray_url = format!("http://127.0.0.1:{}", web_port);
 
     let _web_handle = web::run_web_server(web::WebServerConfig {
         host: web_host,
@@ -171,7 +171,7 @@ pub async fn run_router(
     {
         let cfg = config.read().await;
         if cfg.web.open_browser {
-            let url = format!("http://{}:{}", cfg.web.host, cfg.web.port);
+            let url = format!("http://127.0.0.1:{}", cfg.web.port);
             tracing::info!("Opening browser at {}", url);
             let _ = webbrowser::open(&url);
         }

@@ -352,6 +352,11 @@ function setNestedValue(obj, path, val) {
 }
 
 async function saveConfig() {
+    if (!configData) {
+        showToast('Config not loaded yet. Please wait.', 'error');
+        return;
+    }
+
     const btn = document.getElementById('btn-save-config');
     btn.disabled = true;
     btn.textContent = 'Saving...';
@@ -537,8 +542,9 @@ function togglePause() {
 function clearLogs() {
     logEntries = [];
     logBuffer = [];
-    const viewer = document.getElementById('log-viewer');
-    viewer.innerHTML = '<div class="text-gray-500">Waiting for log entries...</div>';
+    logPaused = false;
+    document.getElementById('btn-pause').textContent = 'Pause';
+    renderLogs();
 }
 
 function toggleAutoScroll() {

@@ -183,8 +183,8 @@ fn test_transport_start_requires_stopped_state() {
         _ => panic!("Expected InvalidStateTransition"),
     }
 
-    let result = sm.try_transition(AppState::Stopped);
-    assert!(result.is_err());
+    // Starting -> Stopped is now valid (startup failure rollback)
+    assert!(sm.try_transition(AppState::Stopped).is_ok());
 }
 
 // ---------------------------------------------------------------------------

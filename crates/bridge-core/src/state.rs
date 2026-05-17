@@ -47,6 +47,7 @@ impl StateManager {
             (current, to),
             (AppState::Stopped, AppState::Starting)
                 | (AppState::Starting, AppState::Running)
+                | (AppState::Starting, AppState::Stopped)
                 | (AppState::Running, AppState::Stopping)
                 | (AppState::Stopping, AppState::Stopped)
         );
@@ -102,9 +103,15 @@ mod tests {
         // Start from Stopped -> Starting
         assert!(sm.try_transition(AppState::Starting).is_ok());
 
-        // Starting -> anything but Running is illegal
-        assert!(sm.try_transition(AppState::Stopped).is_err());
+        // Starting -> Stopped is now valid (startup failure rollback)
+        assert!(sm.try_transition(AppState::Stopped).is_ok());
+
+        // Restart -> Starting
+        assert!(sm.try_transition(AppState::Starting).is_ok());
+
+        // Starting -> Starting is illegal
         assert!(sm.try_transition(AppState::Starting).is_err());
+        // Starting -> Stopping is illegal
         assert!(sm.try_transition(AppState::Stopping).is_err());
 
         // Go to Running

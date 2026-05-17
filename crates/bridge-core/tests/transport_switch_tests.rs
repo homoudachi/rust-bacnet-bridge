@@ -97,16 +97,25 @@ fn test_state_manager_stopped_only_allows_starting() {
     ));
 }
 
-/// StateManager rejects Starting -> Stopped (must go Running first)
+/// StateManager allows Starting -> Stopped (startup failure rollback),
+/// but rejects Starting -> Starting and Starting -> Stopping
 #[test]
-fn test_state_manager_starting_cannot_skip_running() {
+fn test_state_manager_starting_transitions() {
     let sm = StateManager::new();
     sm.try_transition(AppState::Starting).unwrap();
 
+    // Starting -> Stopped is valid (startup failure rollback)
+    assert!(sm.try_transition(AppState::Stopped).is_ok());
+
+    // Restart
+    sm.try_transition(AppState::Starting).unwrap();
+
+    // Starting -> Starting is illegal
     assert!(matches!(
-        sm.try_transition(AppState::Stopped),
+        sm.try_transition(AppState::Starting),
         Err(BridgeError::InvalidStateTransition { .. })
     ));
+    // Starting -> Stopping is illegal
     assert!(matches!(
         sm.try_transition(AppState::Stopping),
         Err(BridgeError::InvalidStateTransition { .. })
