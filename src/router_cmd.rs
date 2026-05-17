@@ -209,7 +209,7 @@ pub async fn run_router(
                             if let Some(r) = running.take() {
                                 r.stop().await;
                             }
-                            state.try_transition(AppState::Stopped)?;
+    // Initial state is already Stopped, no transition needed
                             tracing::info!("Router stopped via command");
                         }
                     }
