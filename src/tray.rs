@@ -96,12 +96,13 @@ pub fn run_tray(
     web_url: String,
     mut shutdown_rx: oneshot::Receiver<()>,
 ) {
-    let mut tray =
-        TrayItem::new("BACnet Bridge", IconSource::Resource("")).expect("create tray item");
-
     let icons = Arc::new(TrayIcons::new());
 
-    tray.set_icon(IconSource::RawIcon(icons.red as isize)).ok();
+    let mut tray = TrayItem::new(
+        "BACnet Bridge",
+        IconSource::RawIcon(icons.red as isize),
+    )
+    .expect("create tray item");
     tray.inner_mut().set_tooltip("BACnet Bridge - Stopped").ok();
 
     let tray = Arc::new(Mutex::new(tray));
