@@ -42,7 +42,7 @@ pub async fn run_router(
 
     let config = Arc::new(RwLock::new(config));
     let state = StateManager::new();
-    state.try_transition(AppState::Starting)?;
+    state.try_transition(AppState::Stopped)?;
 
     let is_embedded_hub = with_hub;
     let mut cloud_hub_url: Option<String> = None;
@@ -91,42 +91,7 @@ pub async fn run_router(
         });
     }
 
-    {
-        let cfg = config.read().await;
-        tracing::info!(
-            "Starting BACnet Bridge router (device_id={}, transport={}, lan_port={})",
-            cfg.router.device_id,
-            cfg.router.transport,
-            cfg.router.lan.port,
-        );
-    }
-
-    let cfg_guard = config.read().await;
-    let start_timeout = Duration::from_secs(15);
-    let mut running: Option<RunningRouter> =
-        match tokio::time::timeout(start_timeout, start_router(&cfg_guard)).await {
-            Ok(Ok(r)) => Some(r),
-            Ok(Err(e)) => {
-                tracing::warn!(
-                    "Initial router start failed: {}. Dashboard available for configuration.",
-                    e
-                );
-                state.try_transition(AppState::Stopped).ok();
-                None
-            }
-            Err(_elapsed) => {
-                tracing::warn!(
-                    "Initial router start timed out after 15s. Dashboard available for configuration."
-                );
-                state.try_transition(AppState::Stopped).ok();
-                None
-            }
-        };
-    drop(cfg_guard);
-    if running.is_some() {
-        state.try_transition(AppState::Running)?;
-        tracing::info!("Router running");
-    }
+    let mut running: Option<RunningRouter> = None;
 
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<web::RouterCommand>(32);
     let state_rx = state.subscribe();
@@ -186,6 +151,15 @@ pub async fn run_router(
         cloud_hub_url,
         hub_listen_addr,
     });
+
+    {
+        let cfg = config.read().await;
+        if cfg.web.open_browser {
+            let url = format!("http://{}:{}", cfg.web.host, cfg.web.port);
+            tracing::info!("Opening browser at {}", url);
+            let _ = webbrowser::open(&url);
+        }
+    }
 
     #[cfg(feature = "windows-tray")]
     let (tray_shutdown_tx, tray_shutdown_rx) = tokio::sync::oneshot::channel::<()>();

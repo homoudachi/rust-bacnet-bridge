@@ -35,7 +35,9 @@ function updateStateIndicator(state) {
     switch (state) {
         case 'Running': dot.classList.add('bg-green-500'); break;
         case 'Starting':
-        case 'Stopping': dot.classList.add('bg-yellow-500'); break;
+        case 'Stopping':
+            dot.classList.add('bg-yellow-500', 'animate-pulse');
+            break;
         default: dot.classList.add('bg-red-500');
     }
 }
@@ -98,11 +100,23 @@ async function updateStatus() {
 
 async function updateHubStatus() {
     try {
+        const hubCard = document.getElementById('hub-card');
+
+        // Don't show hub info when transport is tailscale (SC-only)
+        const statusResp = await fetch('/api/status');
+        if (statusResp.ok) {
+            const statusData = await statusResp.json();
+            if (statusData.transport === 'tailscale') {
+                hubCard.style.display = 'none';
+                return;
+            }
+            hubCard.style.display = '';
+        }
+
         const resp = await fetch('/api/hub/status');
         if (!resp.ok) return;
         const data = await resp.json();
 
-        const hubCard = document.getElementById('hub-card');
         const addrRow = document.getElementById('hub-addr-row');
         const spokeRow = document.getElementById('hub-spoke-row');
 
@@ -167,17 +181,30 @@ async function loadInterfaces() {
             list.innerHTML = '<p class="text-sm text-gray-400">No interfaces configured</p>';
             return;
         }
-        list.innerHTML = data.interfaces.map(iface => `
-            <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-gray-700">${iface.name}</span>
-                    ${iface.is_tailscale
-                        ? '<span class="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700 font-medium">TS</span>'
-                        : '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700 font-medium">LAN</span>'}
-                </div>
-                <span class="text-sm font-mono text-gray-600">${iface.ip}</span>
-            </div>
-        `).join('');
+        const typeBadge = (type) => {
+            if (type === 'Tailscale') return '<span class="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700 font-medium">TS</span>';
+            if (type === 'LAN') return '<span class="px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700 font-medium">LAN</span>';
+            return '<span class="px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-600 font-medium">' + type + '</span>';
+        };
+        list.innerHTML = `
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-gray-500 border-b">
+                        <th class="pb-2">Interface</th>
+                        <th class="pb-2">IP Address</th>
+                        <th class="pb-2 w-16">Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.interfaces.map(iface => `
+                        <tr class="border-b border-gray-100 hover:bg-gray-50">
+                            <td class="py-2 font-medium text-gray-700">${iface.name}</td>
+                            <td class="py-2 font-mono text-gray-600">${iface.ip}</td>
+                            <td class="py-2">${typeBadge(iface.type)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
     } catch (e) {
         // silent
     }

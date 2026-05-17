@@ -132,52 +132,47 @@ pub async fn router_info(State(state): State<WebAppState>) -> impl IntoResponse 
     })
 }
 
-pub async fn interfaces(State(state): State<WebAppState>) -> impl IntoResponse {
-    let cfg = state.inner.config.read().await;
-
+pub async fn interfaces(State(_state): State<WebAppState>) -> impl IntoResponse {
     let mut seen_ips = std::collections::HashSet::new();
     let mut interfaces = Vec::new();
 
-    // Collect system network interfaces at runtime
     if let Ok(ifaces) = get_if_addrs::get_if_addrs() {
         for iface in ifaces {
-            let ip = iface.ip().to_string();
-            if seen_ips.insert(ip.clone()) {
-                // Windows returns adapter GUIDs like {XXXXXXXX-XXXX-...}
-                // Use IP as label for GUID-named interfaces
+            let ip = match iface.ip() {
+                std::net::IpAddr::V4(v4) => v4,
+                _ => continue,
+            };
+
+            let ip_str = ip.to_string();
+            if !seen_ips.insert(ip_str.clone()) {
+                continue;
+            }
+
+            let octets = ip.octets();
+            let (name, iface_type) = if ip_str.starts_with("100.") {
+                ("Tailscale".to_string(), "Tailscale")
+            } else if ip_str == "127.0.0.1" {
+                ("Loopback".to_string(), "Other")
+            } else if octets[0] == 10
+                || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+                || (octets[0] == 192 && octets[1] == 168)
+            {
+                ("Ethernet".to_string(), "LAN")
+            } else {
                 let name = if iface.name.starts_with('{') && iface.name.contains('-') {
-                    ip.clone()
+                    ip_str.clone()
                 } else {
                     iface.name.clone()
                 };
-                interfaces.push(json!({
-                    "name": name,
-                    "ip": ip.clone(),
-                    "is_tailscale": ip.starts_with("100.")
-                }));
-            }
+                (name, "Other")
+            };
+
+            interfaces.push(json!({
+                "name": name,
+                "ip": ip_str,
+                "type": iface_type,
+            }));
         }
-    }
-
-    // Also include configured interfaces if not already in the system list
-    if !cfg.router.lan.interface.is_empty() && !seen_ips.contains(&cfg.router.lan.interface) {
-        let ip = &cfg.router.lan.interface;
-        interfaces.push(json!({
-            "name": "lan",
-            "ip": ip,
-            "is_tailscale": ip.starts_with("100.")
-        }));
-    }
-
-    if !cfg.router.tailscale.interface.is_empty()
-        && !seen_ips.contains(&cfg.router.tailscale.interface)
-    {
-        let ip = &cfg.router.tailscale.interface;
-        interfaces.push(json!({
-            "name": "tailscale",
-            "ip": ip,
-            "is_tailscale": ip.starts_with("100.")
-        }));
     }
 
     Json(json!({ "interfaces": interfaces }))
