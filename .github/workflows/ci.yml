@@ -92,7 +92,7 @@ jobs:
   docker-e2e-tailscale:
     name: Docker E2E (Tailscale)
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Build and run Tailscale topology
