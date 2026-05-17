@@ -91,9 +91,7 @@ pub async fn start_router(config: &BridgeConfig) -> Result<RunningRouter, Bridge
         .start()
         .await
         .map_err(|e| BridgeError::Router(format!("loopback device start: {e}")))?;
-    tokio::spawn(async move {
-        while let Some(_) = loopback_rx.recv().await {}
-    });
+    tokio::spawn(async move { while loopback_rx.recv().await.is_some() {} });
 
     let lan_mac = encode_bip_mac(actual_lan_ip, lan_port);
 
