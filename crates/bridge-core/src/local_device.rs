@@ -321,7 +321,10 @@ async fn handle_read_property(
             network: config.local_network,
             mac_address: bacnet_types::MacAddr::from_slice(&config.local_mac),
         }),
-        destination: msg.source_network.clone(),
+        destination: msg.source_network.clone().or(Some(NpduAddress {
+            network: 1,
+            mac_address: msg.source_mac.clone(),
+        })),
         hop_count: 255,
         payload: rp_apdu,
         ..Npdu::default()
@@ -362,7 +365,10 @@ async fn handle_subscribe_cov(lan_transport: &mut impl TransportPort, msg: &Rece
             network: 1,
             mac_address: bacnet_types::MacAddr::from_slice(lan_transport.local_mac()),
         }),
-        destination: msg.source_network.clone(),
+        destination: msg.source_network.clone().or(Some(NpduAddress {
+            network: 1,
+            mac_address: msg.source_mac.clone(),
+        })),
         hop_count: 255,
         payload: response,
         ..Npdu::default()
@@ -414,7 +420,10 @@ async fn handle_write_property(
             network: config.local_network,
             mac_address: bacnet_types::MacAddr::from_slice(&config.local_mac),
         }),
-        destination: msg.source_network.clone(),
+        destination: msg.source_network.clone().or(Some(NpduAddress {
+            network: 1,
+            mac_address: msg.source_mac.clone(),
+        })),
         hop_count: 255,
         payload: apdu_buf.freeze(),
         ..Npdu::default()
