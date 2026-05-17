@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "windows-tray", windows_subsystem = "windows")]
+
 #[cfg(feature = "windows-tray")]
 mod tray;
 
