@@ -102,17 +102,26 @@ pub async fn run_router(
     }
 
     let cfg_guard = config.read().await;
-    let mut running: Option<RunningRouter> = match start_router(&cfg_guard).await {
-        Ok(r) => Some(r),
-        Err(e) => {
-            tracing::warn!(
-                "Initial router start failed: {}. Dashboard available for configuration.",
-                e
-            );
-            state.try_transition(AppState::Stopped).ok();
-            None
-        }
-    };
+    let start_timeout = Duration::from_secs(15);
+    let mut running: Option<RunningRouter> =
+        match tokio::time::timeout(start_timeout, start_router(&cfg_guard)).await {
+            Ok(Ok(r)) => Some(r),
+            Ok(Err(e)) => {
+                tracing::warn!(
+                    "Initial router start failed: {}. Dashboard available for configuration.",
+                    e
+                );
+                state.try_transition(AppState::Stopped).ok();
+                None
+            }
+            Err(_elapsed) => {
+                tracing::warn!(
+                    "Initial router start timed out after 15s. Dashboard available for configuration."
+                );
+                state.try_transition(AppState::Stopped).ok();
+                None
+            }
+        };
     drop(cfg_guard);
     if running.is_some() {
         state.try_transition(AppState::Running)?;
@@ -228,18 +237,24 @@ pub async fn run_router(
                             continue;
                         }
                         let cfg_guard = config.read().await;
-                        match start_router(&cfg_guard).await {
-                            Ok(r) => {
+                        let start_timeout = Duration::from_secs(15);
+                        match tokio::time::timeout(start_timeout, start_router(&cfg_guard)).await {
+                            Ok(Ok(r)) => {
                                 drop(cfg_guard);
                                 *bbmd_handle.write().await = r.bbmd_state.clone();
                                 running = Some(r);
                                 state.try_transition(AppState::Running).ok();
                                 tracing::info!("Router started via command");
                             }
-                            Err(e) => {
+                            Ok(Err(e)) => {
                                 drop(cfg_guard);
                                 state.try_transition(AppState::Stopped).ok();
                                 tracing::error!("Failed to start router via command: {e}");
+                            }
+                            Err(_elapsed) => {
+                                drop(cfg_guard);
+                                state.try_transition(AppState::Stopped).ok();
+                                tracing::error!("Router start timed out after 15s");
                             }
                         }
                     }
@@ -267,19 +282,28 @@ pub async fn run_router(
 
                         state.try_transition(AppState::Starting).ok();
                         let cfg_guard = config.read().await;
-                        match start_router(&cfg_guard).await {
-                            Ok(r) => {
+                        let start_timeout = Duration::from_secs(15);
+                        match tokio::time::timeout(start_timeout, start_router(&cfg_guard)).await {
+                            Ok(Ok(r)) => {
                                 drop(cfg_guard);
                                 *bbmd_handle.write().await = r.bbmd_state.clone();
                                 running = Some(r);
                                 state.try_transition(AppState::Running).ok();
                                 tracing::info!("Router started with transport: {}", mode);
                             }
-                            Err(e) => {
+                            Ok(Err(e)) => {
                                 drop(cfg_guard);
                                 state.try_transition(AppState::Stopped).ok();
                                 tracing::error!(
                                     "Failed to start router with transport {}: {e}",
+                                    mode
+                                );
+                            }
+                            Err(_elapsed) => {
+                                drop(cfg_guard);
+                                state.try_transition(AppState::Stopped).ok();
+                                tracing::error!(
+                                    "Router start timed out after 15s with transport: {}",
                                     mode
                                 );
                             }

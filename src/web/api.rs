@@ -143,8 +143,15 @@ pub async fn interfaces(State(state): State<WebAppState>) -> impl IntoResponse {
         for iface in ifaces {
             let ip = iface.ip().to_string();
             if seen_ips.insert(ip.clone()) {
+                // Windows returns adapter GUIDs like {XXXXXXXX-XXXX-...}
+                // Use IP as label for GUID-named interfaces
+                let name = if iface.name.starts_with('{') && iface.name.contains('-') {
+                    ip.clone()
+                } else {
+                    iface.name.clone()
+                };
                 interfaces.push(json!({
-                    "name": iface.name.clone(),
+                    "name": name,
                     "ip": ip.clone(),
                     "is_tailscale": ip.starts_with("100.")
                 }));
