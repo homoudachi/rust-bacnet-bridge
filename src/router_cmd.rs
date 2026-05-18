@@ -42,6 +42,10 @@ pub async fn run_router(
         }
     }
 
+    if let Err(e) = config.validate() {
+        tracing::error!("Config validation failed at startup: {e}");
+    }
+
     let config = Arc::new(RwLock::new(config));
     let state = StateManager::new();
     // Initial state is Stopped — no transition needed
@@ -213,20 +217,28 @@ pub async fn run_router(
                             tracing::info!("Router stopped via command");
                         }
                     }
-                    web::RouterCommand::Start => {
+                    web::RouterCommand::Start(tx) => {
                         if state.current() != AppState::Stopped {
-                            tracing::warn!(
+                            let _ = tx.send(Err(format!(
                                 "Cannot start router: current state is {:?}",
                                 state.current()
-                            );
+                            )));
                             continue;
                         }
+
+                        let cfg_guard = config.read().await;
+                        if let Err(e) = cfg_guard.validate() {
+                            drop(cfg_guard);
+                            let _ = tx.send(Err(e.to_string()));
+                            continue;
+                        }
+
                         tracing::info!("Starting router via command");
                         if state.try_transition(AppState::Starting).is_err() {
-                            tracing::error!("State transition to Starting failed");
+                            drop(cfg_guard);
+                            let _ = tx.send(Err("State transition to Starting failed".to_string()));
                             continue;
                         }
-                        let cfg_guard = config.read().await;
                         let start_timeout = Duration::from_secs(15);
                         match tokio::time::timeout(start_timeout, start_router(&cfg_guard)).await {
                             Ok(Ok(r)) => {
@@ -234,26 +246,38 @@ pub async fn run_router(
                                 *bbmd_handle.write().await = r.bbmd_state.clone();
                                 running = Some(r);
                                 state.try_transition(AppState::Running).ok();
-                                tracing::info!("Router started via command");
+                                let _ = tx.send(Ok(()));
                             }
                             Ok(Err(e)) => {
                                 drop(cfg_guard);
                                 state.try_transition(AppState::Stopped).ok();
-                                tracing::error!("Failed to start router via command: {e}");
+                                let _ = tx.send(Err(e.to_string()));
                             }
                             Err(_elapsed) => {
                                 drop(cfg_guard);
                                 state.try_transition(AppState::Stopped).ok();
-                                tracing::error!("Router start timed out after 15s");
+                                let _ = tx.send(Err("Router start timed out after 15s".to_string()));
                             }
                         }
                     }
-                    web::RouterCommand::SwitchTransport(mode) => {
+                    web::RouterCommand::SwitchTransport(mode, tx) => {
                         if mode != "sc" && mode != "tailscale" {
-                            tracing::warn!("Invalid transport mode: {}", mode);
+                            let _ = tx.send(Err(format!("Invalid transport mode: {mode}")));
                             continue;
                         }
-                        tracing::info!("Transport switch requested: {}", mode);
+
+                        // Validate new config before stopping
+                        {
+                            let cfg = config.read().await;
+                            let mut new_cfg = cfg.clone();
+                            new_cfg.router.transport = mode.clone();
+                            if let Err(e) = new_cfg.validate() {
+                                let _ = tx.send(Err(e.to_string()));
+                                continue;
+                            }
+                        }
+
+                        tracing::info!("Transport switch requested: {mode}");
 
                         if let Some(r) = running.take() {
                             tracing::info!("Stopping router for transport switch");
@@ -267,7 +291,7 @@ pub async fn run_router(
                             let mut cfg = config.write().await;
                             cfg.router.transport = mode.clone();
                             cfg.save(Path::new(&config_path_str)).ok();
-                            tracing::info!("Transport config saved: {}", mode);
+                            tracing::info!("Transport config saved: {mode}");
                         }
 
                         state.try_transition(AppState::Starting).ok();
@@ -279,23 +303,17 @@ pub async fn run_router(
                                 *bbmd_handle.write().await = r.bbmd_state.clone();
                                 running = Some(r);
                                 state.try_transition(AppState::Running).ok();
-                                tracing::info!("Router started with transport: {}", mode);
+                                let _ = tx.send(Ok(()));
                             }
                             Ok(Err(e)) => {
                                 drop(cfg_guard);
                                 state.try_transition(AppState::Stopped).ok();
-                                tracing::error!(
-                                    "Failed to start router with transport {}: {e}",
-                                    mode
-                                );
+                                let _ = tx.send(Err(e.to_string()));
                             }
                             Err(_elapsed) => {
                                 drop(cfg_guard);
                                 state.try_transition(AppState::Stopped).ok();
-                                tracing::error!(
-                                    "Router start timed out after 15s with transport: {}",
-                                    mode
-                                );
+                                let _ = tx.send(Err("Router start timed out after 15s".to_string()));
                             }
                         }
                     }

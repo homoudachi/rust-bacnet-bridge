@@ -1,17 +1,69 @@
 let configData = null;
 let interfaceList = [];
 
+function clearFieldErrors() {
+    document.querySelectorAll('.field-error').forEach(el => el.remove());
+    document.querySelectorAll('.border-red-500').forEach(el => el.classList.remove('border-red-500'));
+}
+
 function showToast(msg, type) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium translate-y-2 opacity-0 transition-all duration-300 pointer-events-none';
+    // Remove any existing toast
+    const existing = document.getElementById('toast');
+    if (existing) existing.remove();
+
+    const t = document.createElement('div');
+    t.id = 'toast';
+    t.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium translate-y-2 opacity-0 transition-all duration-300 pointer-events-auto z-50 flex items-center gap-3';
     if (type === 'error') t.classList.add('bg-red-600');
     else if (type === 'success') t.classList.add('bg-green-600');
     else t.classList.add('bg-gray-800');
+
+    const span = document.createElement('span');
+    span.textContent = msg;
+    t.appendChild(span);
+
+    if (type === 'error') {
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '\u2715';
+        closeBtn.className = 'text-white opacity-70 hover:opacity-100 font-bold text-lg leading-none ml-1';
+        closeBtn.onclick = () => t.remove();
+        t.appendChild(closeBtn);
+    }
+
+    // Log errors to server
+    if (type === 'error') {
+        logToServer('ERROR', msg);
+    }
+
+    document.body.appendChild(t);
+
     requestAnimationFrame(() => {
         t.classList.add('show');
-        setTimeout(() => t.classList.remove('show'), 3000);
+        const duration = type === 'error' ? 10000 : 3000;
+        const timer = setTimeout(() => {
+            if (t.parentNode) t.remove();
+        }, duration);
+        if (type === 'error') {
+            t._dismissTimer = timer;
+            const origOnClick = closeBtn.onclick;
+            closeBtn.onclick = () => {
+                clearTimeout(timer);
+                t.remove();
+            };
+        }
     });
+}
+
+async function logToServer(level, message) {
+    try {
+        await fetch('/api/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level, message }),
+        });
+    } catch (e) {
+        // best-effort; don't loop
+    }
 }
 
 function formatUptime(secs) {
@@ -166,6 +218,7 @@ async function switchHubMode(mode) {
             showToast(err.error || 'Switch failed', 'error');
         }
     } catch (e) {
+        logToServer('ERROR', 'Network error switching hub mode: ' + (e.message || e));
         showToast('Network error', 'error');
     } finally {
         btn.disabled = false;
@@ -371,13 +424,15 @@ function setNestedValue(obj, path, val) {
     const keys = path.split('.');
     let o = obj;
     for (let i = 0; i < keys.length - 1; i++) {
-        if (!o[keys[i]]) o[keys[i]] = {};
+        if (o[keys[i]] == null) o[keys[i]] = {};
         o = o[keys[i]];
     }
-    if (val === 'true') val = true;
-    else if (val === 'false') val = false;
-    else if (val === '' && typeof o[keys[keys.length - 1]] === 'string') val = '';
-    else if (val !== '' && !isNaN(Number(val)) && val.includes('.') === false) val = Number(val);
+    if (typeof val === 'string') {
+        if (val === 'true') val = true;
+        else if (val === 'false') val = false;
+        else if (val === '' && typeof o[keys[keys.length - 1]] === 'string') val = '';
+        else if (val !== '' && !isNaN(Number(val)) && !val.includes('.')) val = Number(val);
+    }
     o[keys[keys.length - 1]] = val;
 }
 
@@ -399,6 +454,54 @@ async function saveConfig() {
             setNestedValue(config, key, val);
         });
 
+        // Client-side validation
+        clearFieldErrors();
+        const errors = [];
+
+        const transport = document.getElementById('cfg-router-transport')?.value;
+        if (transport === 'sc') {
+            const hubUrl = document.getElementById('cfg-router-sc-hub-url')?.value;
+            if (!hubUrl || !hubUrl.trim()) {
+                errors.push({ el: document.getElementById('cfg-router-sc-hub-url'), msg: 'Hub URL required for BACnet/SC' });
+            }
+        } else if (transport === 'tailscale') {
+            const tsIface = document.getElementById('cfg-router-tailscale-interface')?.value;
+            if (!tsIface || !tsIface.trim()) {
+                errors.push({ el: document.getElementById('cfg-router-tailscale-interface'), msg: 'Interface required for Tailscale' });
+            }
+        }
+
+        const portFields = [
+            { id: 'cfg-router-lan-port', label: 'LAN Port' },
+            { id: 'cfg-router-tailscale-port', label: 'Tailscale Port' },
+            { id: 'cfg-web-port', label: 'Web Port' },
+        ];
+        portFields.forEach(f => {
+            const el = document.getElementById(f.id);
+            if (el && (el.value === '' || Number(el.value) <= 0)) {
+                errors.push({ el, msg: `${f.label} must be > 0` });
+            }
+        });
+
+        const devName = document.getElementById('cfg-router-device-name');
+        if (devName && !devName.value.trim()) {
+            errors.push({ el: devName, msg: 'Device Name must not be empty' });
+        }
+
+        if (errors.length > 0) {
+            errors.forEach(e => {
+                e.el.classList.add('border-red-500');
+                const errDiv = document.createElement('div');
+                errDiv.className = 'field-error text-red-500 text-xs mt-1';
+                errDiv.textContent = e.msg;
+                e.el.parentNode.appendChild(errDiv);
+            });
+            showToast('Please fix validation errors', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Save Config';
+            return;
+        }
+
         const resp = await fetch('/api/config', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -413,6 +516,7 @@ async function saveConfig() {
             showToast(err.error || 'Failed to save config', 'error');
         }
     } catch (e) {
+        logToServer('ERROR', 'Network error saving config: ' + (e.message || e));
         showToast('Network error saving config', 'error');
     } finally {
         btn.disabled = false;
@@ -442,6 +546,7 @@ async function switchTransport(mode) {
             showToast(err.error || 'Switch failed', 'error');
         }
     } catch (e) {
+        logToServer('ERROR', 'Network error switching transport: ' + (e.message || e));
         showToast('Network error', 'error');
     } finally {
         btn.disabled = false;
@@ -459,6 +564,7 @@ async function stopRouter() {
             showToast(err.error || 'Stop failed', 'error');
         }
     } catch (e) {
+        logToServer('ERROR', 'Network error stopping router: ' + (e.message || e));
         showToast('Network error', 'error');
     }
 }
@@ -474,6 +580,7 @@ async function startRouter() {
             showToast(err.error || 'Start failed', 'error');
         }
     } catch (e) {
+        logToServer('ERROR', 'Network error starting router: ' + (e.message || e));
         showToast('Network error', 'error');
     }
 }
@@ -664,7 +771,10 @@ function filterLogs() {
 async function downloadLogs() {
     try {
         const resp = await fetch('/api/logs');
-        if (!resp.ok) return;
+        if (!resp.ok) {
+            showToast('Failed to fetch logs', 'error');
+            return;
+        }
         const entries = await resp.json();
         const text = entries.map(e => `[${e.timestamp}] [${e.level}] [${e.target}] ${e.message}`).join('\n');
         const blob = new Blob([text], { type: 'text/plain' });
@@ -675,7 +785,8 @@ async function downloadLogs() {
         a.click();
         URL.revokeObjectURL(url);
     } catch (e) {
-        // silent
+        logToServer('ERROR', 'Network error downloading logs: ' + (e.message || e));
+        showToast('Network error downloading logs', 'error');
     }
 }
 

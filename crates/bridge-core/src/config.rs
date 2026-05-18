@@ -51,6 +51,81 @@ impl BridgeConfig {
         Ok(())
     }
 
+    pub fn validate(&self) -> Result<(), BridgeError> {
+        let mut errors = Vec::new();
+
+        // router.transport
+        if self.router.transport != "sc" && self.router.transport != "tailscale" {
+            errors.push(format!(
+                "router.transport must be 'sc' or 'tailscale', got '{}'",
+                self.router.transport
+            ));
+        }
+
+        // router.device_id must be <= max BACnet instance
+        if self.router.device_id > 4194303 {
+            errors.push(format!(
+                "router.device_id must be <= 4194303, got {}",
+                self.router.device_id
+            ));
+        }
+
+        // router.device_name
+        if self.router.device_name.trim().is_empty() {
+            errors.push("router.device_name must not be empty".to_string());
+        }
+
+        // LAN
+        if self.router.lan.port == 0 {
+            errors.push("router.lan.port must be non-zero".to_string());
+        }
+        if !self.router.lan.interface.is_empty()
+            && self.router.lan.interface.split('/').next().unwrap_or("").parse::<std::net::Ipv4Addr>().is_err()
+        {
+            errors.push(format!(
+                "router.lan.interface '{}' is not a valid IPv4 address",
+                self.router.lan.interface
+            ));
+        }
+
+        // SC (only when transport is sc)
+        if self.router.transport == "sc" {
+            if self.router.sc.hub_url.trim().is_empty() {
+                errors.push("router.sc.hub_url must not be empty when transport is 'sc'".to_string());
+            }
+            if self.router.sc.reconnect_initial_ms == 0 {
+                errors.push("router.sc.reconnect_initial_ms must be > 0".to_string());
+            }
+        }
+
+        // Tailscale (only when transport is tailscale)
+        if self.router.transport == "tailscale" {
+            let ts_iface = self.router.tailscale.interface.trim();
+            if ts_iface.is_empty() {
+                errors.push("router.tailscale.interface must not be empty when transport is 'tailscale'".to_string());
+            } else if ts_iface.split('/').next().unwrap_or("").parse::<std::net::Ipv4Addr>().is_err() {
+                errors.push(format!(
+                    "router.tailscale.interface '{}' is not a valid IPv4 address",
+                    self.router.tailscale.interface
+                ));
+            }
+            if self.router.tailscale.port == 0 {
+                errors.push("router.tailscale.port must be non-zero".to_string());
+            }
+        }
+
+        // Web
+        if self.web.port == 0 {
+            errors.push("web.port must be non-zero".to_string());
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(BridgeError::ConfigValidation(errors.join("; ")))
+        }
+    }
+
     pub fn default_config_path() -> PathBuf {
         let base = dirs::config_dir().expect("Could not determine config directory");
         base.join("bacnet-bridge").join("config.toml")
@@ -569,5 +644,127 @@ mod tests {
         assert!(!toml_str.contains("bdt"));
         assert!(!toml_str.contains("cert"));
         assert!(!toml_str.contains("key"));
+    }
+
+    #[test]
+    fn test_validate_default_sc_valid() {
+        let mut config = BridgeConfig::generate_default();
+        config.router.sc.hub_url = "wss://hub.example.com".to_string();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_default_tailscale_valid() {
+        let mut config = BridgeConfig::generate_default();
+        config.router.transport = "tailscale".to_string();
+        config.router.tailscale.interface = "100.64.0.1".to_string();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_invalid_transport() {
+        let mut c = BridgeConfig::generate_default();
+        c.router.transport = "invalid".to_string();
+        let err = c.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("router.transport"));
+        assert!(msg.contains("'sc' or 'tailscale'"));
+    }
+
+    #[test]
+    fn test_validate_empty_hub_url_for_sc() {
+        let config = BridgeConfig::generate_default();
+        let err = config.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("sc.hub_url"));
+    }
+
+    #[test]
+    fn test_validate_empty_tailscale_interface() {
+        let mut config = BridgeConfig::generate_default();
+        config.router.transport = "tailscale".to_string();
+        let err = config.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("tailscale.interface"));
+    }
+
+    #[test]
+    fn test_validate_bad_tailscale_ip() {
+        let mut config = BridgeConfig::generate_default();
+        config.router.transport = "tailscale".to_string();
+        config.router.tailscale.interface = "not-an-ip".to_string();
+        let err = config.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("tailscale.interface"));
+        assert!(msg.contains("valid IPv4"));
+    }
+
+    #[test]
+    fn test_validate_device_id_too_large() {
+        let mut config = BridgeConfig::generate_default();
+        config.router.device_id = 5000000;
+        config.router.sc.hub_url = "wss://hub.example.com".to_string();
+        let err = config.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("device_id"));
+    }
+
+    #[test]
+    fn test_validate_empty_device_name() {
+        let mut config = BridgeConfig::generate_default();
+        config.router.device_name = "".to_string();
+        config.router.sc.hub_url = "wss://hub.example.com".to_string();
+        let err = config.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("device_name"));
+    }
+
+    #[test]
+    fn test_validate_zero_lan_port() {
+        let mut config = BridgeConfig::generate_default();
+        config.router.lan.port = 0;
+        config.router.sc.hub_url = "wss://hub.example.com".to_string();
+        let err = config.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("lan.port"));
+    }
+
+    #[test]
+    fn test_validate_zero_web_port() {
+        let mut config = BridgeConfig::generate_default();
+        config.web.port = 0;
+        config.router.sc.hub_url = "wss://hub.example.com".to_string();
+        let err = config.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("web.port"));
+    }
+
+    #[test]
+    fn test_validate_deserialized_invalid() {
+        let toml_str = r#"
+[router]
+transport = "tailscale"
+device_id = 9999999
+
+[router.lan]
+interface = "not-an-ip"
+port = 0
+
+[router.tailscale]
+interface = ""
+port = 0
+
+[web]
+port = 0
+"#;
+        let config: BridgeConfig = toml::from_str(toml_str).expect("deserialize");
+        let err = config.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("device_id"));
+        assert!(msg.contains("lan.interface"));
+        assert!(msg.contains("lan.port"));
+        assert!(msg.contains("tailscale.interface"));
+        assert!(msg.contains("tailscale.port"));
+        assert!(msg.contains("web.port"));
     }
 }

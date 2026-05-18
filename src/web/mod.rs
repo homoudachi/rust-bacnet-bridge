@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use axum::Router;
-use tokio::sync::{mpsc, watch, Mutex, RwLock};
+use tokio::sync::{mpsc, oneshot, watch, Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tower_http::services::ServeDir;
 
@@ -31,12 +31,12 @@ pub struct WebAppState {
     pub inner: Arc<WebAppStateInner>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[allow(dead_code)]
 pub enum RouterCommand {
     Stop,
-    Start,
-    SwitchTransport(String),
+    Start(oneshot::Sender<Result<(), String>>),
+    SwitchTransport(String, oneshot::Sender<Result<(), String>>),
     Exit,
 }
 
@@ -96,6 +96,7 @@ pub fn run_web_server(cfg: WebServerConfig) -> JoinHandle<()> {
         .route("/api/hub/mode", axum::routing::post(api::hub_mode_switch))
         .route("/api/fdt", axum::routing::get(api::get_fdt))
         .route("/api/logs", axum::routing::get(api::get_logs))
+        .route("/api/log", axum::routing::post(api::post_log))
         .route("/ws/logs", axum::routing::get(api::ws_logs));
 
     let app = if cfg.dev {

@@ -134,7 +134,8 @@ pub fn run_tray(
         let mut t = tray.lock().unwrap();
         let tx = command_tx.clone();
         t.add_menu_item("Start Router", move || {
-            let _ = tx.try_send(RouterCommand::Start);
+            let (tx_resp, _) = tokio::sync::oneshot::channel();
+            let _ = tx.try_send(RouterCommand::Start(tx_resp));
         })
         .ok();
     }
@@ -148,7 +149,8 @@ pub fn run_tray(
         let mut t = tray.lock().unwrap();
         let tx = command_tx.clone();
         t.add_menu_item("Switch to BACnet/SC", move || {
-            let _ = tx.try_send(RouterCommand::SwitchTransport("sc".into()));
+            let (tx_resp, _) = tokio::sync::oneshot::channel();
+            let _ = tx.try_send(RouterCommand::SwitchTransport("sc".into(), tx_resp));
         })
         .ok();
     }
@@ -157,7 +159,8 @@ pub fn run_tray(
         let mut t = tray.lock().unwrap();
         let tx = command_tx.clone();
         t.add_menu_item("Switch to Tailscale", move || {
-            let _ = tx.try_send(RouterCommand::SwitchTransport("tailscale".into()));
+            let (tx_resp, _) = tokio::sync::oneshot::channel();
+            let _ = tx.try_send(RouterCommand::SwitchTransport("tailscale".into(), tx_resp));
         })
         .ok();
     }

@@ -10,7 +10,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use bridge_core::{AppState, BridgeConfig, FdtDisplayEntry};
+use bridge_core::{AppState, BridgeConfig, FdtDisplayEntry, LogEntry};
 
 use crate::web::{RouterCommand, WebAppState};
 
@@ -222,10 +222,21 @@ pub async fn transport_switch(
     }
 
     let tx = state.inner.command_tx.as_ref().unwrap();
+    let (tx_response, rx_response) = tokio::sync::oneshot::channel::<Result<(), String>>();
     let _ = tx
-        .send(RouterCommand::SwitchTransport(body.mode.clone()))
+        .send(RouterCommand::SwitchTransport(body.mode.clone(), tx_response))
         .await;
-    Ok(Json(json!({ "status": "ok", "transport": body.mode })))
+    match rx_response.await {
+        Ok(Ok(())) => Ok(Json(json!({ "status": "ok", "transport": body.mode }))),
+        Ok(Err(e)) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": e })),
+        )),
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Internal error: no response from router" })),
+        )),
+    }
 }
 
 pub async fn transport_stop(
@@ -278,8 +289,19 @@ pub async fn transport_start(
 
     match &state.inner.command_tx {
         Some(tx) => {
-            let _ = tx.send(RouterCommand::Start).await;
-            Ok(Json(json!({ "status": "ok" })))
+            let (tx_response, rx_response) = tokio::sync::oneshot::channel::<Result<(), String>>();
+            let _ = tx.send(RouterCommand::Start(tx_response)).await;
+            match rx_response.await {
+                Ok(Ok(())) => Ok(Json(json!({ "status": "ok" }))),
+                Ok(Err(e)) => Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": e })),
+                )),
+                Err(_) => Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Internal error: no response from router" })),
+                )),
+            }
         }
         None => Err((
             StatusCode::SERVICE_UNAVAILABLE,
@@ -294,6 +316,12 @@ pub async fn update_config(
 ) -> impl IntoResponse {
     match serde_json::from_value::<BridgeConfig>(body) {
         Ok(new_config) => {
+            if let Err(e) = new_config.validate() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": e.to_string() })),
+                );
+            }
             let mut cfg = state.inner.config.write().await;
             *cfg = new_config;
             if let Some(path) = &state.inner.config_path {
@@ -339,6 +367,38 @@ pub async fn get_logs(
     let level = params.level.as_deref();
     let entries = state.inner.logbuf.recent(limit, level);
     Json(entries)
+}
+
+#[derive(Deserialize)]
+pub struct LogPostBody {
+    pub level: String,
+    pub message: String,
+}
+
+pub async fn post_log(
+    State(state): State<WebAppState>,
+    Json(body): Json<LogPostBody>,
+) -> impl IntoResponse {
+    let level = match body.level.to_uppercase().as_str() {
+        "ERROR" => tracing::Level::ERROR,
+        "WARN" => tracing::Level::WARN,
+        "INFO" => tracing::Level::INFO,
+        _ => tracing::Level::INFO,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let entry = LogEntry {
+        id: 0,
+        timestamp: ts.to_string(),
+        level: level.to_string(),
+        target: "frontend".to_string(),
+        message: body.message,
+        fields: std::collections::HashMap::new(),
+    };
+    state.inner.logbuf.push(entry);
+    (StatusCode::OK, Json(json!({ "status": "ok" })))
 }
 
 pub async fn hub_status(State(state): State<WebAppState>) -> impl IntoResponse {

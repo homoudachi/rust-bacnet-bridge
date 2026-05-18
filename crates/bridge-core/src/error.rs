@@ -25,4 +25,7 @@ pub enum BridgeError {
 
     #[error("Transport error: {0}")]
     Transport(String),
+
+    #[error("Config validation error: {0}")]
+    ConfigValidation(String),
 }
