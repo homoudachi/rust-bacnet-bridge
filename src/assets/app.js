@@ -320,7 +320,7 @@ function setNestedValue(obj, path, val) {
     if (val === 'true') val = true;
     else if (val === 'false') val = false;
     else if (val === '' && typeof o[keys[keys.length - 1]] === 'string') val = '';
-    else if (val !== '' && !isNaN(Number(val)) && val.includes('.') === false) val = Number(val);
+    else if (typeof val === 'string' && val !== '' && !isNaN(Number(val)) && val.includes('.') === false) val = Number(val);
     o[keys[keys.length - 1]] = val;
 }
 
