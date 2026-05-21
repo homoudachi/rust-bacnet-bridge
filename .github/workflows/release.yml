@@ -56,7 +56,7 @@ jobs:
         with:
           name: bacnet-bridge-windows-x86_64
           path: release-artifacts/
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: release-artifacts/*
           generate_release_notes: true
